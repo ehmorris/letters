@@ -3,9 +3,12 @@ import {
   generateCanvas,
   transition,
   progress,
+  clampedProgress,
   easeInOutSine,
+  easeInOutBack,
   degToRag,
 } from "./helpers.js";
+import { drawGuides } from "./guides.js";
 
 const [CTX, canvasWidth, canvasHeight] = generateCanvas({
   width: window.innerWidth,
@@ -13,19 +16,11 @@ const [CTX, canvasWidth, canvasHeight] = generateCanvas({
   attachNode: "#canvas",
 });
 
+const initTime = Date.now();
+const debounceTime = 400;
 let textString = "A";
 let textType = "letter";
 let lastLetterUpdate = Date.now();
-const initTime = Date.now();
-
-const drawGuides = (CTX) => {
-  CTX.save();
-  CTX.fillStyle = "red";
-  CTX.fillRect(canvasWidth / 2, 0, 1, canvasHeight);
-  CTX.fillRect(0, canvasHeight / 2, canvasWidth, 1);
-  CTX.fillStyle = "black";
-  CTX.restore();
-};
 
 const updateText = (newText) => {
   textString = newText.toUpperCase();
@@ -39,15 +34,13 @@ const setRandomText = () => {
 };
 
 document.addEventListener("keypress", ({ key }) => {
-  console.log(key);
-  const debounceTime = 0;
   if (
     Date.now() - lastLetterUpdate > debounceTime &&
     key.length === 1 &&
     /[a-zA-Z0-9]/.test(key)
   ) {
     updateText(key);
-  } else if (key === " ") {
+  } else if (Date.now() - lastLetterUpdate > debounceTime && key === " ") {
     setRandomText();
   }
 });
@@ -55,14 +48,19 @@ document.addEventListener("keypress", ({ key }) => {
 new FontFace("Ginto", "url(./Ginto.woff2)").load().then((font) => {
   document.fonts.add(font);
 
-  animate((deltaTime) => {
+  animate(() => {
     CTX.clearRect(0, 0, canvasWidth, canvasHeight);
 
-    drawGuides(CTX);
+    drawGuides(CTX, canvasWidth, canvasHeight);
 
     CTX.save();
     const timeTransitionSize = progress(0, 1600, Date.now() - initTime);
     const timeTransitionRotate = progress(0, 1900, Date.now() - initTime);
+    const letterChangeProgress = clampedProgress(
+      0,
+      200,
+      Date.now() - lastLetterUpdate
+    );
 
     const fontSizeTransition = transition(
       97,
@@ -76,12 +74,19 @@ new FontFace("Ginto", "url(./Ginto.woff2)").load().then((font) => {
       timeTransitionRotate,
       easeInOutSine
     );
+    const letterChangeBounce = transition(
+      0.9,
+      1,
+      letterChangeProgress,
+      easeInOutBack
+    );
 
     CTX.font = `600 ${fontSizeTransition}vmin Ginto`;
     CTX.textAlign = "center";
     CTX.textBaseline = "middle";
     const verticalOffset = CTX.measureText(textString).width / 8;
     CTX.translate(canvasWidth / 2, canvasHeight / 2 + verticalOffset);
+    CTX.scale(letterChangeBounce, letterChangeBounce);
     CTX.rotate(angleTransition);
     CTX.fillStyle = textType === "letter" ? "blue" : "red";
     CTX.fillText(textString, 0, 0);
