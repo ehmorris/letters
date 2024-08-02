@@ -45,6 +45,12 @@ document.addEventListener("keypress", ({ key }) => {
   }
 });
 
+document.addEventListener("touchstart", () => {
+  if (Date.now() - lastLetterUpdate > debounceTime) {
+    setRandomText();
+  }
+});
+
 new FontFace("Ginto", "url(./Ginto.woff2)").load().then((font) => {
   document.fonts.add(font);
 
