@@ -7,8 +7,8 @@ import {
   easeInOutSine,
   easeInOutBack,
   degToRag,
+  randomBetween,
 } from "./helpers.js";
-import { drawGuides } from "./guides.js";
 
 const [CTX, canvasWidth, canvasHeight] = generateCanvas({
   width: window.innerWidth,
@@ -18,13 +18,25 @@ const [CTX, canvasWidth, canvasHeight] = generateCanvas({
 
 const initTime = Date.now();
 const debounceTime = 400;
+
+const pink = "#e79fae";
+const red = "#da4b34";
+const yellow = "#f5c347";
+const turquoise = "#8bcbf3";
+const white = "#fbfbf8";
+
 let textString = "A";
 let textType = "letter";
 let lastLetterUpdate = Date.now();
+let letterColor = pink;
 
 const updateText = (newText) => {
   textString = newText.toUpperCase();
   textType = /[a-zA-Z]/.test(newText) ? "letter" : "number";
+  letterColor =
+    textType === "letter"
+      ? [pink, red][Math.round(randomBetween(0, 1))]
+      : [yellow, turquoise, white][Math.round(randomBetween(0, 2))];
   lastLetterUpdate = Date.now();
 };
 
@@ -56,8 +68,6 @@ new FontFace("Ginto", "url(./Ginto.woff2)").load().then((font) => {
 
   animate(() => {
     CTX.clearRect(0, 0, canvasWidth, canvasHeight);
-
-    drawGuides(CTX, canvasWidth, canvasHeight);
 
     CTX.save();
     const timeTransitionSize = progress(0, 1600, Date.now() - initTime);
@@ -94,7 +104,7 @@ new FontFace("Ginto", "url(./Ginto.woff2)").load().then((font) => {
     CTX.translate(canvasWidth / 2, canvasHeight / 2 + verticalOffset);
     CTX.scale(letterChangeBounce, letterChangeBounce);
     CTX.rotate(angleTransition);
-    CTX.fillStyle = textType === "letter" ? "blue" : "red";
+    CTX.fillStyle = letterColor;
     CTX.fillText(textString, 0, 0);
 
     CTX.restore();

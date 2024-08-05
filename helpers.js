@@ -63,3 +63,5 @@ export const easeInOutBack = (x) => {
 };
 
 export const degToRag = (degree) => (degree * Math.PI) / 180;
+
+export const randomBetween = (min, max) => Math.random() * (max - min) + min;
