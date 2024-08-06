@@ -17,3 +17,16 @@ body {
   background: var(--blue);
   font: 500 100vmin Ginto, sans-serif;
 }
+
+@keyframes introAnimation {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+canvas {
+  animation: introAnimation 400ms 150ms ease-in-out both;
+}
