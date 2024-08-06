@@ -43,14 +43,8 @@ const setRandomText = () => {
 };
 
 document.addEventListener("keypress", ({ key }) => {
-  if (
-    Date.now() - lastLetterUpdate > debounceTime &&
-    key.length === 1 &&
-    isValidText(key)
-  ) {
-    updateText(key);
-  } else if (Date.now() - lastLetterUpdate > debounceTime && key === " ") {
-    setRandomText();
+  if (Date.now() - lastLetterUpdate > debounceTime) {
+    isValidText(key) ? updateText(key) : setRandomText();
   }
 });
 
