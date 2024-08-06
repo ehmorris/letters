@@ -1,3 +1,9 @@
+@font-face {
+  font-family: "Ginto";
+  src: url("ABCGintoRoundedVariableVF-Trial.woff2") format("woff2"),
+    url("ABCGintoRoundedVariableVF-Trial.woff") format("woff");
+}
+
 body {
   --blue: #2e2d70;
   --pink: #e79fae;
@@ -9,4 +15,5 @@ body {
   overflow: hidden;
   user-select: none;
   background: var(--blue);
+  font: 500 100vmin Ginto, sans-serif;
 }

@@ -4,11 +4,10 @@ import {
   transition,
   progress,
   clampedProgress,
-  easeInOutSine,
-  easeInOutBack,
   degToRag,
   randomBetween,
 } from "./helpers.js";
+import { easeInOutSine, easeInOutBack } from "./easings.js";
 
 const [CTX, canvasWidth, canvasHeight] = generateCanvas({
   width: window.innerWidth,
@@ -63,50 +62,47 @@ document.addEventListener("touchstart", () => {
   }
 });
 
-new FontFace("Ginto", "url(./Ginto.woff2)").load().then((font) => {
-  document.fonts.add(font);
+animate(() => {
+  CTX.clearRect(0, 0, canvasWidth, canvasHeight);
 
-  animate(() => {
-    CTX.clearRect(0, 0, canvasWidth, canvasHeight);
+  CTX.save();
+  const timeTransitionSize = progress(0, 1600, Date.now() - initTime);
+  const timeTransitionRotate = progress(0, 1900, Date.now() - initTime);
+  const letterChangeProgress = clampedProgress(
+    0,
+    200,
+    Date.now() - lastLetterUpdate
+  );
 
-    CTX.save();
-    const timeTransitionSize = progress(0, 1600, Date.now() - initTime);
-    const timeTransitionRotate = progress(0, 1900, Date.now() - initTime);
-    const letterChangeProgress = clampedProgress(
-      0,
-      200,
-      Date.now() - lastLetterUpdate
-    );
+  const sizeTransition = transition(
+    0.97,
+    1.03,
+    timeTransitionSize,
+    easeInOutSine
+  );
+  const angleTransition = transition(
+    degToRag(-2),
+    degToRag(2),
+    timeTransitionRotate,
+    easeInOutSine
+  );
+  const letterChangeBounce = transition(
+    0.9,
+    1,
+    letterChangeProgress,
+    easeInOutBack
+  );
 
-    const fontSizeTransition = transition(
-      97,
-      103,
-      timeTransitionSize,
-      easeInOutSine
-    );
-    const angleTransition = transition(
-      degToRag(-2),
-      degToRag(2),
-      timeTransitionRotate,
-      easeInOutSine
-    );
-    const letterChangeBounce = transition(
-      0.9,
-      1,
-      letterChangeProgress,
-      easeInOutBack
-    );
+  CTX.font = `500 100vmin Ginto`;
+  CTX.textAlign = "center";
+  CTX.textBaseline = "middle";
+  const verticalOffset = CTX.measureText(textString).width / 8;
+  CTX.translate(canvasWidth / 2, canvasHeight / 2 + verticalOffset);
+  CTX.scale(sizeTransition, sizeTransition);
+  CTX.scale(letterChangeBounce, letterChangeBounce);
+  CTX.rotate(angleTransition);
+  CTX.fillStyle = letterColor;
+  CTX.fillText(textString, 0, 0);
 
-    CTX.font = `600 ${fontSizeTransition}vmin Ginto`;
-    CTX.textAlign = "center";
-    CTX.textBaseline = "middle";
-    const verticalOffset = CTX.measureText(textString).width / 8;
-    CTX.translate(canvasWidth / 2, canvasHeight / 2 + verticalOffset);
-    CTX.scale(letterChangeBounce, letterChangeBounce);
-    CTX.rotate(angleTransition);
-    CTX.fillStyle = letterColor;
-    CTX.fillText(textString, 0, 0);
-
-    CTX.restore();
-  });
+  CTX.restore();
 });
