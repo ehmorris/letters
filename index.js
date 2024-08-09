@@ -48,10 +48,20 @@ document.addEventListener("keypress", ({ key }) => {
   }
 });
 
-document.addEventListener("touchstart", () => {
-  if (Date.now() - lastLetterUpdate > debounceTime) {
-    setRandomText();
-  }
+document.addEventListener(
+  "touchstart",
+  (e) => {
+    if (Date.now() - lastLetterUpdate > debounceTime) {
+      setRandomText();
+    }
+
+    e.preventDefault();
+  },
+  { passive: false }
+);
+
+document.addEventListener("touchmove", (e) => e.preventDefault(), {
+  passive: false,
 });
 
 animate(() => {
