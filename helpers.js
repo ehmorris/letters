@@ -43,4 +43,6 @@ export const transition = (start, end, progress, easingFunc) => {
 
 export const degToRag = (degree) => (degree * Math.PI) / 180;
 
+export const randomBool = (probability = 0.5) => Math.random() >= probability;
+
 export const randomBetween = (min, max) => Math.random() * (max - min) + min;

@@ -8,6 +8,7 @@ import {
   randomBetween,
 } from "./helpers.js";
 import { easeInOutSine, easeInOutBack } from "./easings.js";
+import { makeParticle } from "./particle.js";
 
 const [CTX, canvasWidth, canvasHeight] = generateCanvas({
   width: window.innerWidth,
@@ -27,16 +28,45 @@ const white = "#fbfbf8";
 let textString = "A";
 let lastLetterUpdate = Date.now();
 let letterColor = pink;
+let particles = [];
 
 const isValidText = (text) => /[a-zA-Z0-9]/.test(text);
 const isLetter = (text) => /[a-zA-Z]/.test(text);
+const isNumber = (text) => /[0-9]/.test(text);
+
 const updateText = (newText) => {
   textString = newText.toUpperCase();
   letterColor = isLetter(newText)
     ? [pink, red][Math.round(randomBetween(0, 1))]
     : [yellow, turquoise, white][Math.round(randomBetween(0, 2))];
+
+  if (isNumber(newText)) {
+    const number = parseInt(newText);
+    const size = Math.min(canvasHeight, canvasWidth) / 8;
+    particles = new Array(number).fill().map(() =>
+      makeParticle(
+        CTX,
+        canvasWidth,
+        canvasHeight,
+        {
+          x: randomBetween(canvasWidth / 8, canvasWidth - canvasWidth / 8),
+          y: randomBetween(canvasHeight / 8, canvasHeight - canvasHeight / 8),
+        },
+        { x: randomBetween(-3, 3), y: randomBetween(-4, -2) },
+        size,
+        size,
+        [pink, red, yellow, turquoise, white].filter(
+          (color) => color !== letterColor
+        )[Math.floor(Math.random() * 4)]
+      )
+    );
+  } else {
+    particles = [];
+  }
+
   lastLetterUpdate = Date.now();
 };
+
 const setRandomText = () => {
   const options = "ABCDEFGHIJKLMNOPQRSTUVQXYZ0123456789";
   updateText(options.split("")[Math.floor(Math.random() * options.length)]);
@@ -64,7 +94,7 @@ document.addEventListener("touchmove", (e) => e.preventDefault(), {
   passive: false,
 });
 
-animate(() => {
+animate((deltaTime) => {
   CTX.clearRect(0, 0, canvasWidth, canvasHeight);
 
   const sizeTransition = transition(
@@ -85,6 +115,8 @@ animate(() => {
     clampedProgress(0, 200, Date.now() - lastLetterUpdate),
     easeInOutBack
   );
+
+  particles.forEach((particle) => particle.draw(deltaTime));
 
   CTX.save();
   CTX.font = `500 100vmin Ginto`;
