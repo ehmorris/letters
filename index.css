@@ -14,6 +14,7 @@ body {
   margin: 0;
   overflow: hidden;
   user-select: none;
+  touch-action: none;
   background: var(--blue);
   font: 500 100vmin Ginto, sans-serif;
 }
@@ -29,4 +30,5 @@ body {
 
 canvas {
   animation: introAnimation 400ms 150ms ease-in-out both;
+  touch-action: none;
 }
