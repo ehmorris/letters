@@ -6,6 +6,7 @@ import {
   clampedProgress,
   degToRag,
   randomBetween,
+  forCollidingParticles,
 } from "./helpers.js";
 import { easeInOutSine, easeInOutBack } from "./easings.js";
 import { makeParticle } from "./particle.js";
@@ -115,6 +116,12 @@ animate((deltaTime) => {
     clampedProgress(0, 200, Date.now() - lastLetterUpdate),
     easeInOutBack
   );
+
+  forCollidingParticles(particles, (p1, p2) => {
+    console.log("collision");
+    p1.collision(p2.getPosition(), p2.getVelocity());
+    p2.collision(p1.getPosition(), p1.getVelocity());
+  });
 
   particles.forEach((particle) => particle.draw(deltaTime));
 

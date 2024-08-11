@@ -45,6 +45,30 @@ export const makeParticle = (
     position.y = nextPosition.y;
   };
 
+  const collision = (otherParticlePosition, otherParticleVelocity) => {
+    const dx = otherParticlePosition.x - position.x;
+    const dy = otherParticlePosition.y - position.y;
+
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    // Calculate the normal vector (direction of collision)
+    const nx = dx / distance;
+    const ny = dy / distance;
+
+    // Calculate relative velocity
+    const dvx = otherParticleVelocity.x - velocity.x;
+    const dvy = otherParticleVelocity.y - velocity.y;
+
+    // Calculate relative velocity in the direction of the normal
+    const impactSpeed = dvx * nx + dvy * ny;
+
+    // Calculate and apply the impulse
+    const impulse = 2 * impactSpeed;
+
+    velocity.x -= impulse * nx;
+    velocity.y -= impulse * ny;
+  };
+
   const draw = (deltaTime) => {
     update(deltaTime);
 
@@ -64,5 +88,11 @@ export const makeParticle = (
     CTX.restore();
   };
 
-  return { draw, getPosition: () => position, getVelocity: () => velocity };
+  return {
+    draw,
+    collision,
+    getPosition: () => position,
+    getVelocity: () => velocity,
+    getDiameter: () => width,
+  };
 };
