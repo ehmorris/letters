@@ -17,10 +17,10 @@ export const makeBall = (
 
     if (position.x > canvasWidth - radius) {
       position.x = canvasWidth - radius;
-      velocity.x *= -1;
+      velocity.x *= -0.7;
     } else if (position.x < radius) {
       position.x = radius;
-      velocity.x *= -1;
+      velocity.x *= -0.7;
     }
 
     if (position.y > canvasHeight - radius) {
