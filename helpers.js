@@ -46,28 +46,3 @@ export const degToRag = (degree) => (degree * Math.PI) / 180;
 export const randomBool = (probability = 0.5) => Math.random() >= probability;
 
 export const randomBetween = (min, max) => Math.random() * (max - min) + min;
-
-export const forCollidingParticles = (particles, onCollide) => {
-  particles.forEach((p1) => {
-    const p1Position = p1.getPosition();
-    const p1Diameter = p1.getDiameter();
-
-    particles.forEach((p2) => {
-      if (p1 !== p2) {
-        // Calculate the distance between the centers of the two particles
-        const p2Position = p2.getPosition();
-        const dx = p2Position.x - p1Position.x;
-        const dy = p2Position.y - p1Position.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-
-        // Calculate the sum of the radii
-        const radiusSum = p1Diameter / 2 + p2.getDiameter() / 2;
-
-        // If the distance is less than or equal to the sum of the radii, they are colliding
-        if (distance <= radiusSum) {
-          onCollide(p1, p2);
-        }
-      }
-    });
-  });
-};

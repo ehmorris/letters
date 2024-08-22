@@ -6,10 +6,14 @@ import {
   clampedProgress,
   degToRag,
   randomBetween,
-  forCollidingParticles,
 } from "./helpers.js";
 import { easeInOutSine, easeInOutBack } from "./easings.js";
-import { makeParticle } from "./particle.js";
+import {
+  makeBall,
+  checkBallCollision,
+  adjustBallPositions,
+  resolveBallCollision,
+} from "./ball.js";
 
 const [CTX, canvasWidth, canvasHeight] = generateCanvas({
   width: window.innerWidth,
@@ -29,7 +33,7 @@ const white = "#fbfbf8";
 let textString = "A";
 let lastLetterUpdate = Date.now();
 let letterColor = pink;
-let particles = [];
+let balls = [];
 
 const isValidText = (text) => /[a-zA-Z0-9]/.test(text);
 const isLetter = (text) => /[a-zA-Z]/.test(text);
@@ -43,26 +47,27 @@ const updateText = (newText) => {
 
   if (isNumber(newText)) {
     const number = parseInt(newText);
-    const size = Math.min(canvasHeight, canvasWidth) / 8;
-    particles = new Array(number).fill().map(() =>
-      makeParticle(
-        CTX,
-        canvasWidth,
-        canvasHeight,
-        {
+    const widthRequiredForEachBall = canvasWidth / number;
+    const radius = Math.min(canvasWidth / 4, widthRequiredForEachBall / 2) - 2;
+
+    balls = new Array(number).fill().map(() =>
+      makeBall(CTX, canvasWidth, canvasHeight, {
+        startPosition: {
           x: randomBetween(canvasWidth / 8, canvasWidth - canvasWidth / 8),
           y: randomBetween(canvasHeight / 8, canvasHeight - canvasHeight / 8),
         },
-        { x: randomBetween(-3, 3), y: randomBetween(-4, -2) },
-        size,
-        size,
-        [pink, red, yellow, turquoise, white].filter(
+        startVelocity: {
+          x: randomBetween(-6, 6),
+          y: randomBetween(-6, -2),
+        },
+        radius,
+        fill: [pink, red, yellow, turquoise, white].filter(
           (color) => color !== letterColor
-        )[Math.floor(Math.random() * 4)]
-      )
+        )[Math.floor(Math.random() * 4)],
+      })
     );
   } else {
-    particles = [];
+    balls = [];
   }
 
   lastLetterUpdate = Date.now();
@@ -117,13 +122,20 @@ animate((deltaTime) => {
     easeInOutBack
   );
 
-  forCollidingParticles(particles, (p1, p2) => {
-    console.log("collision");
-    p1.collision(p2.getPosition(), p2.getVelocity());
-    p2.collision(p1.getPosition(), p1.getVelocity());
+  balls.forEach((ballA) => {
+    ballA.update(deltaTime);
+    balls.forEach((ballB) => {
+      if (ballA !== ballB) {
+        const collision = checkBallCollision(ballA, ballB);
+        if (collision[0]) {
+          adjustBallPositions(ballA, ballB, collision[1]);
+          resolveBallCollision(ballA, ballB);
+        }
+      }
+    });
   });
 
-  particles.forEach((particle) => particle.draw(deltaTime));
+  balls.forEach((b) => b.draw(deltaTime));
 
   CTX.save();
   CTX.font = `500 100vmin Ginto`;
