@@ -48,7 +48,8 @@ const updateText = (newText) => {
   if (isNumber(newText)) {
     const number = parseInt(newText);
     const widthRequiredForEachBall = canvasWidth / number;
-    const radius = Math.min(canvasWidth / 4, widthRequiredForEachBall / 2) - 2;
+    const maxSize = Math.min(canvasWidth / 4, canvasHeight / 3);
+    const radius = Math.min(maxSize, widthRequiredForEachBall / 2) - 2;
 
     balls = new Array(number).fill().map(() =>
       makeBall(CTX, canvasWidth, canvasHeight, {
