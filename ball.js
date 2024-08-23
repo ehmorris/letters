@@ -48,6 +48,7 @@ export const makeBall = (
     getPosition: () => position,
     getVelocity: () => velocity,
     getRadius: () => radius,
+    getFill: () => fill,
     setPosition: (passedPosition) => (position = passedPosition),
     setVelocity: (passedVelocity) => (velocity = passedVelocity),
   };

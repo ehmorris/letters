@@ -6,14 +6,15 @@ import {
   clampedProgress,
   degToRag,
   randomBetween,
+  findBallAtPoint,
 } from "./helpers.js";
-import { easeInOutSine, easeInOutBack } from "./easings.js";
 import {
   makeBall,
   checkBallCollision,
   adjustBallPositions,
   resolveBallCollision,
 } from "./ball.js";
+import { easeInOutSine, easeInOutBack } from "./easings.js";
 
 const [CTX, canvasWidth, canvasHeight] = generateCanvas({
   width: window.innerWidth,
@@ -32,8 +33,9 @@ const white = "#fbfbf8";
 
 let textString = "A";
 let lastLetterUpdate = Date.now();
-let letterColor = pink;
+let textColor = pink;
 let balls = [];
+let explosion = [];
 
 const isValidText = (text) => /[a-zA-Z0-9]/.test(text);
 const isLetter = (text) => /[a-zA-Z]/.test(text);
@@ -41,7 +43,7 @@ const isNumber = (text) => /[0-9]/.test(text);
 
 const updateText = (newText) => {
   textString = newText.toUpperCase();
-  letterColor = isLetter(newText)
+  textColor = isLetter(newText)
     ? [pink, red][Math.round(randomBetween(0, 1))]
     : [yellow, turquoise, white][Math.round(randomBetween(0, 2))];
 
@@ -63,14 +65,39 @@ const updateText = (newText) => {
         },
         radius,
         fill: [pink, red, yellow, turquoise, white].filter(
-          (color) => color !== letterColor
+          (color) => color !== textColor
         )[Math.floor(Math.random() * 4)],
       })
     );
+    explosion = [];
   } else {
     balls = [];
+    explosion = [];
   }
 
+  lastLetterUpdate = Date.now();
+};
+
+const removeBall = (collidingBall) => {
+  balls = balls.filter((b) => b !== collidingBall);
+  explosion = new Array(24).fill().map(() => {
+    const originVelocity = collidingBall.getVelocity();
+    return makeBall(CTX, canvasWidth, canvasHeight, {
+      startPosition: collidingBall.getPosition(),
+      startVelocity: {
+        x: randomBetween(originVelocity.x - 5, originVelocity.x + 5),
+        y: randomBetween(originVelocity.y - 5, originVelocity.y + 5),
+      },
+      radius: randomBetween(1, 4),
+      fill: collidingBall.getFill(),
+    });
+  });
+};
+
+const reduceNumber = () => {
+  const newNumber = parseInt(textString) - 1;
+  textString = newNumber.toString();
+  textColor = [yellow, turquoise, white][Math.round(randomBetween(0, 2))];
   lastLetterUpdate = Date.now();
 };
 
@@ -78,6 +105,17 @@ const setRandomText = () => {
   const options = "ABCDEFGHIJKLMNOPQRSTUVQXYZ0123456789";
   updateText(options.split("")[Math.floor(Math.random() * options.length)]);
 };
+
+document.addEventListener("click", ({ clientX: x, clientY: y }) => {
+  if (isNumber(textString) && parseInt(textString) > 1) {
+    const collidingBall = findBallAtPoint(balls, { x, y });
+
+    if (collidingBall) {
+      removeBall(collidingBall);
+      reduceNumber();
+    }
+  }
+});
 
 document.addEventListener("keypress", ({ key }) => {
   if (Date.now() - lastLetterUpdate > debounceTime) {
@@ -137,6 +175,10 @@ animate((deltaTime) => {
   });
 
   balls.forEach((b) => b.draw(deltaTime));
+  explosion.forEach((e) => {
+    e.update(deltaTime);
+    e.draw(deltaTime);
+  });
 
   CTX.save();
   CTX.font = `500 100vmin Ginto`;
@@ -147,7 +189,7 @@ animate((deltaTime) => {
   CTX.scale(sizeTransition, sizeTransition);
   CTX.scale(letterChangeBounce, letterChangeBounce);
   CTX.rotate(angleTransition);
-  CTX.fillStyle = letterColor;
+  CTX.fillStyle = textColor;
   CTX.fillText(textString, 0, 0);
   CTX.restore();
 });
