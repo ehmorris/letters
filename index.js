@@ -80,13 +80,22 @@ const updateText = (newText) => {
 
 const removeBall = (collidingBall) => {
   balls = balls.filter((b) => b !== collidingBall);
-  explosion = new Array(24).fill().map(() => {
+  explosion = new Array(80).fill().map(() => {
     const originVelocity = collidingBall.getVelocity();
+    const randomAngle = Math.random() * Math.PI * 2;
+
     return makeBall(CTX, canvasWidth, canvasHeight, {
-      startPosition: collidingBall.getPosition(),
+      startPosition: {
+        x:
+          collidingBall.getPosition().x +
+          Math.cos(randomAngle) * collidingBall.getRadius(),
+        y:
+          collidingBall.getPosition().y +
+          Math.sin(randomAngle) * collidingBall.getRadius(),
+      },
       startVelocity: {
-        x: randomBetween(originVelocity.x - 5, originVelocity.x + 5),
-        y: randomBetween(originVelocity.y - 5, originVelocity.y + 5),
+        x: randomBetween(originVelocity.x - 3, originVelocity.x + 3),
+        y: randomBetween(originVelocity.y - 8, 0),
       },
       radius: randomBetween(1, 4),
       fill: collidingBall.getFill(),
