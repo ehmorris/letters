@@ -10,7 +10,9 @@ export const makeBall = (
 ) => {
   let position = { ...startPosition };
   let velocity = { ...startVelocity };
-  const timeToPop = 1600;
+  const popAnimationDurationMax = 1900;
+  const popAnimationDuration = randomBetween(1200, popAnimationDurationMax);
+  const numberOfPopPieces = 60;
   let popped = false;
   let poppedTime = false;
   let poppedPieces = [];
@@ -44,7 +46,7 @@ export const makeBall = (
   const pop = () => {
     popped = true;
     poppedTime = Date.now();
-    poppedPieces = new Array(80).fill().map(() => {
+    poppedPieces = new Array(numberOfPopPieces).fill().map(() => {
       const randomAngle = Math.random() * Math.PI * 2;
       return makeBall(CTX, canvasWidth, canvasHeight, {
         startPosition: {
@@ -64,11 +66,15 @@ export const makeBall = (
   const draw = (deltaTime, scale = 1) => {
     if (popped) {
       const timeSincePopped = Date.now() - poppedTime;
-      if (timeSincePopped > timeToPop) {
+      if (timeSincePopped > popAnimationDurationMax) {
         gone = true;
       } else {
-        const scaleProgress = progress(0, timeToPop, timeSincePopped);
         poppedPieces.forEach((p) => {
+          const scaleProgress = progress(
+            0,
+            p.getPopAnimationDuration(),
+            timeSincePopped
+          );
           p.update(deltaTime);
           p.draw(deltaTime, transition(1, 0, scaleProgress, easeOutCubic));
         });
@@ -93,6 +99,7 @@ export const makeBall = (
     getPosition: () => position,
     getVelocity: () => velocity,
     isPopped: () => popped,
+    getPopAnimationDuration: () => popAnimationDuration,
     getRadius: () => radius,
     getFill: () => fill,
     setPosition: (passedPosition) => (position = passedPosition),
