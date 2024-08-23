@@ -8,7 +8,6 @@ export const makeBall = (
   canvasHeight,
   { startPosition, startVelocity, radius, fill }
 ) => {
-  const id = Math.round(Math.random() * 10);
   let position = { ...startPosition };
   let velocity = { ...startVelocity };
   const timeToPop = 1600;
@@ -93,6 +92,7 @@ export const makeBall = (
     pop,
     getPosition: () => position,
     getVelocity: () => velocity,
+    isPopped: () => popped,
     getRadius: () => radius,
     getFill: () => fill,
     setPosition: (passedPosition) => (position = passedPosition),

@@ -49,9 +49,11 @@ export const randomBetween = (min, max) => Math.random() * (max - min) + min;
 
 export const findBallAtPoint = (balls, { x, y }) => {
   return balls.find((ball) => {
-    const dx = x - ball.getPosition().x;
-    const dy = y - ball.getPosition().y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    return distance < ball.getRadius();
+    if (!ball.isPopped()) {
+      const dx = x - ball.getPosition().x;
+      const dy = y - ball.getPosition().y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      return distance < ball.getRadius();
+    }
   });
 };

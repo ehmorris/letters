@@ -142,16 +142,18 @@ animate((deltaTime) => {
   );
 
   balls.forEach((ballA) => {
-    ballA.update(deltaTime);
-    balls.forEach((ballB) => {
-      if (ballA !== ballB) {
-        const collision = checkBallCollision(ballA, ballB);
-        if (collision[0]) {
-          adjustBallPositions(ballA, ballB, collision[1]);
-          resolveBallCollision(ballA, ballB);
+    if (!ballA.isPopped()) {
+      ballA.update(deltaTime);
+      balls.forEach((ballB) => {
+        if (!ballB.isPopped() && ballA !== ballB) {
+          const collision = checkBallCollision(ballA, ballB);
+          if (collision[0]) {
+            adjustBallPositions(ballA, ballB, collision[1]);
+            resolveBallCollision(ballA, ballB);
+          }
         }
-      }
-    });
+      });
+    }
   });
 
   balls.forEach((b) => b.draw(deltaTime, 1));
