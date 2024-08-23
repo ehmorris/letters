@@ -1,4 +1,6 @@
 import { GRAVITY, INTERVAL } from "./constants.js";
+import { progress, transition, randomBetween } from "./helpers.js";
+import { easeOutCubic } from "./easings.js";
 
 export const makeBall = (
   CTX,
@@ -6,45 +8,89 @@ export const makeBall = (
   canvasHeight,
   { startPosition, startVelocity, radius, fill }
 ) => {
+  const id = Math.round(Math.random() * 10);
   let position = { ...startPosition };
   let velocity = { ...startVelocity };
+  const timeToPop = 1600;
+  let popped = false;
+  let poppedTime = false;
+  let poppedPieces = [];
+  let gone = false;
 
   const update = (deltaTime) => {
-    const deltaTimeMultiplier = deltaTime / INTERVAL;
-    position.x += deltaTimeMultiplier * velocity.x;
-    position.y += deltaTimeMultiplier * velocity.y;
-    velocity.y += deltaTimeMultiplier * GRAVITY;
+    if (!gone) {
+      const deltaTimeMultiplier = deltaTime / INTERVAL;
+      position.x += deltaTimeMultiplier * velocity.x;
+      position.y += deltaTimeMultiplier * velocity.y;
+      velocity.y += deltaTimeMultiplier * GRAVITY;
 
-    if (position.x > canvasWidth - radius) {
-      position.x = canvasWidth - radius;
-      velocity.x *= -0.7;
-    } else if (position.x < radius) {
-      position.x = radius;
-      velocity.x *= -0.7;
-    }
+      if (position.x > canvasWidth - radius) {
+        position.x = canvasWidth - radius;
+        velocity.x *= -0.7;
+      } else if (position.x < radius) {
+        position.x = radius;
+        velocity.x *= -0.7;
+      }
 
-    if (position.y > canvasHeight - radius) {
-      position.y = canvasHeight - radius;
-      velocity.y *= -0.7;
-    } else if (position.y < radius) {
-      position.y = radius + 1;
-      velocity.y *= -0.7;
+      if (position.y > canvasHeight - radius) {
+        position.y = canvasHeight - radius;
+        velocity.y *= -0.7;
+      } else if (position.y < radius) {
+        position.y = radius + 1;
+        velocity.y *= -0.7;
+      }
     }
   };
 
-  const draw = () => {
-    CTX.save();
-    CTX.fillStyle = fill;
-    CTX.beginPath();
-    CTX.arc(position.x, position.y, radius, 0, 2 * Math.PI);
-    CTX.closePath();
-    CTX.fill();
-    CTX.restore();
+  const pop = () => {
+    popped = true;
+    poppedTime = Date.now();
+    poppedPieces = new Array(80).fill().map(() => {
+      const randomAngle = Math.random() * Math.PI * 2;
+      return makeBall(CTX, canvasWidth, canvasHeight, {
+        startPosition: {
+          x: position.x + Math.cos(randomAngle) * radius,
+          y: position.y + Math.sin(randomAngle) * radius,
+        },
+        startVelocity: {
+          x: randomBetween(velocity.x - 3, velocity.x + 3),
+          y: randomBetween(velocity.y - 8, 0),
+        },
+        radius: randomBetween(1, 4),
+        fill,
+      });
+    });
+  };
+
+  const draw = (deltaTime, scale = 1) => {
+    if (popped) {
+      const timeSincePopped = Date.now() - poppedTime;
+      if (timeSincePopped > timeToPop) {
+        gone = true;
+      } else {
+        const scaleProgress = progress(0, timeToPop, timeSincePopped);
+        poppedPieces.forEach((p) => {
+          p.update(deltaTime);
+          p.draw(deltaTime, transition(1, 0, scaleProgress, easeOutCubic));
+        });
+      }
+    } else if (!gone) {
+      CTX.save();
+      CTX.fillStyle = fill;
+      CTX.translate(position.x, position.y);
+      CTX.scale(scale, scale);
+      CTX.beginPath();
+      CTX.arc(0, 0, radius, 0, 2 * Math.PI);
+      CTX.closePath();
+      CTX.fill();
+      CTX.restore();
+    }
   };
 
   return {
     update,
     draw,
+    pop,
     getPosition: () => position,
     getVelocity: () => velocity,
     getRadius: () => radius,

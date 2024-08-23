@@ -35,7 +35,6 @@ let textString = "A";
 let lastLetterUpdate = Date.now();
 let textColor = pink;
 let balls = [];
-let explosion = [];
 
 const isValidText = (text) => /[a-zA-Z0-9]/.test(text);
 const isLetter = (text) => /[a-zA-Z]/.test(text);
@@ -69,44 +68,16 @@ const updateText = (newText) => {
         )[Math.floor(Math.random() * 4)],
       })
     );
-    explosion = [];
   } else {
     balls = [];
-    explosion = [];
   }
 
   lastLetterUpdate = Date.now();
 };
 
-const removeBall = (collidingBall) => {
-  balls = balls.filter((b) => b !== collidingBall);
-  explosion = new Array(80).fill().map(() => {
-    const originVelocity = collidingBall.getVelocity();
-    const randomAngle = Math.random() * Math.PI * 2;
-
-    return makeBall(CTX, canvasWidth, canvasHeight, {
-      startPosition: {
-        x:
-          collidingBall.getPosition().x +
-          Math.cos(randomAngle) * collidingBall.getRadius(),
-        y:
-          collidingBall.getPosition().y +
-          Math.sin(randomAngle) * collidingBall.getRadius(),
-      },
-      startVelocity: {
-        x: randomBetween(originVelocity.x - 3, originVelocity.x + 3),
-        y: randomBetween(originVelocity.y - 8, 0),
-      },
-      radius: randomBetween(1, 4),
-      fill: collidingBall.getFill(),
-    });
-  });
-};
-
 const reduceNumber = () => {
   const newNumber = parseInt(textString) - 1;
   textString = newNumber.toString();
-  textColor = [yellow, turquoise, white][Math.round(randomBetween(0, 2))];
   lastLetterUpdate = Date.now();
 };
 
@@ -120,7 +91,7 @@ document.addEventListener("click", ({ clientX: x, clientY: y }) => {
     const collidingBall = findBallAtPoint(balls, { x, y });
 
     if (collidingBall) {
-      removeBall(collidingBall);
+      collidingBall.pop();
       reduceNumber();
     }
   }
@@ -183,11 +154,7 @@ animate((deltaTime) => {
     });
   });
 
-  balls.forEach((b) => b.draw(deltaTime));
-  explosion.forEach((e) => {
-    e.update(deltaTime);
-    e.draw(deltaTime);
-  });
+  balls.forEach((b) => b.draw(deltaTime, 1));
 
   CTX.save();
   CTX.font = `500 100vmin Ginto`;
