@@ -106,7 +106,20 @@ document.addEventListener("keypress", ({ key }) => {
 document.addEventListener(
   "touchstart",
   (e) => {
-    if (Date.now() - lastLetterUpdate > debounceTime) {
+    if (isNumber(textString) && parseInt(textString) > 1) {
+      const coordinates = e.touches[0];
+      const collidingBall = findBallAtPoint(balls, {
+        x: coordinates.clientX,
+        y: coordinates.clientY,
+      });
+
+      if (collidingBall) {
+        collidingBall.pop();
+        reduceNumber();
+      } else {
+        setRandomText();
+      }
+    } else if (Date.now() - lastLetterUpdate > debounceTime) {
       setRandomText();
     }
 
