@@ -87,7 +87,7 @@ const setRandomText = () => {
 };
 
 document.addEventListener("click", ({ clientX: x, clientY: y }) => {
-  if (isNumber(textString) && parseInt(textString) > 1) {
+  if (isNumber(textString) && parseInt(textString) > 0) {
     const collidingBall = findBallAtPoint(balls, { x, y });
 
     if (collidingBall) {
@@ -106,7 +106,7 @@ document.addEventListener("keypress", ({ key }) => {
 document.addEventListener(
   "touchstart",
   (e) => {
-    if (isNumber(textString) && parseInt(textString) > 1) {
+    if (isNumber(textString) && parseInt(textString) > 0) {
       const coordinates = e.touches[0];
       const collidingBall = findBallAtPoint(balls, {
         x: coordinates.clientX,
