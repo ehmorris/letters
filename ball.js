@@ -10,8 +10,11 @@ export const makeBall = (
 ) => {
   let position = { ...startPosition };
   let velocity = { ...startVelocity };
-  const popAnimationDurationMax = 1900;
-  const popAnimationDuration = randomBetween(1200, popAnimationDurationMax);
+  const popAnimationDurationMax = 2400;
+  const popAnimationDuration = randomBetween(
+    popAnimationDurationMax - 800,
+    popAnimationDurationMax
+  );
   const numberOfPopPieces = 60;
   let popped = false;
   let poppedTime = false;
