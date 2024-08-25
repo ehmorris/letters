@@ -107,15 +107,21 @@ document.addEventListener(
   "touchstart",
   (e) => {
     if (isNumber(textString) && parseInt(textString) > 0) {
-      const coordinates = e.touches[0];
-      const collidingBall = findBallAtPoint(balls, {
-        x: coordinates.clientX,
-        y: coordinates.clientY,
-      });
+      const allCollidingBalls = [];
+      for (let index = 0; index < e.touches.length; index++) {
+        const collidingBall = findBallAtPoint(balls, {
+          x: e.touches[index].clientX,
+          y: e.touches[index].clientY,
+        });
 
-      if (collidingBall) {
-        collidingBall.pop();
-        reduceNumber();
+        if (collidingBall) allCollidingBalls.push(collidingBall);
+      }
+
+      if (allCollidingBalls.length > 0) {
+        allCollidingBalls.forEach((ball) => {
+          ball.pop();
+          reduceNumber();
+        });
       } else {
         setRandomText();
       }
