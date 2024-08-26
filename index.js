@@ -181,7 +181,8 @@ animate((deltaTime) => {
   CTX.font = `500 100vmin Ginto`;
   CTX.textAlign = "center";
   CTX.textBaseline = "middle";
-  CTX.translate(canvasWidth / 2, canvasHeight / 2);
+  const verticalAdjustment = Math.min(canvasHeight, canvasHeight) / 14;
+  CTX.translate(canvasWidth / 2, canvasHeight / 2 + verticalAdjustment);
   CTX.scale(sizeTransition, sizeTransition);
   CTX.scale(letterChangeBounce, letterChangeBounce);
   CTX.rotate(angleTransition);
