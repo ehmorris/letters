@@ -14,7 +14,7 @@ import {
   adjustBallPositions,
   resolveBallCollision,
 } from "./ball.js";
-import { easeInOutSine, easeInOutBack } from "./easings.js";
+import { easeInOutSine, easeOutQuart } from "./easings.js";
 
 const [CTX, canvasWidth, canvasHeight] = generateCanvas({
   width: window.innerWidth,
@@ -33,10 +33,12 @@ const white = "#fbfbf8";
 
 let textString = "A";
 let lastLetterUpdate = Date.now();
+let isKeyOrTouchDown = false;
+let lastKeydownOrTouchTime = Date.now();
 let textColor = pink;
 let balls = [];
 
-const isValidText = (text) => /[a-zA-Z0-9]/.test(text);
+const isValidText = (text) => /^[a-zA-Z0-9]{1}$/.test(text);
 const isLetter = (text) => /[a-zA-Z]/.test(text);
 const isNumber = (text) => /[0-9]/.test(text);
 
@@ -101,7 +103,15 @@ document.addEventListener("click", ({ clientX: x, clientY: y }) => {
   }
 });
 
-document.addEventListener("keypress", ({ key }) => {
+document.addEventListener("keydown", ({ repeat }) => {
+  if (!repeat) {
+    isKeyOrTouchDown = true;
+    lastKeydownOrTouchTime = Date.now();
+  }
+});
+
+document.addEventListener("keyup", ({ key }) => {
+  isKeyOrTouchDown = false;
   if (Date.now() - lastLetterUpdate > debounceTime) {
     isValidText(key) ? updateText(key) : setRandomText();
   }
@@ -127,12 +137,25 @@ document.addEventListener(
           reduceNumber();
         });
       } else {
-        setRandomText();
+        isKeyOrTouchDown = true;
+        lastKeydownOrTouchTime = Date.now();
       }
-    } else if (Date.now() - lastLetterUpdate > debounceTime) {
+    } else {
+      isKeyOrTouchDown = true;
+      lastKeydownOrTouchTime = Date.now();
+    }
+    e.preventDefault();
+  },
+  { passive: false }
+);
+
+document.addEventListener(
+  "touchend",
+  (e) => {
+    isKeyOrTouchDown = false;
+    if (Date.now() - lastLetterUpdate > debounceTime) {
       setRandomText();
     }
-
     e.preventDefault();
   },
   { passive: false }
@@ -145,7 +168,7 @@ document.addEventListener("touchmove", (e) => e.preventDefault(), {
 animate((deltaTime) => {
   CTX.clearRect(0, 0, canvasWidth, canvasHeight);
 
-  const sizeTransition = transition(
+  const gentleContinuousSizeTransition = transition(
     0.97,
     1.03,
     progress(0, 1600, Date.now() - initTime),
@@ -157,11 +180,17 @@ animate((deltaTime) => {
     progress(0, 1900, Date.now() - initTime),
     easeInOutSine
   );
-  const letterChangeBounce = transition(
+  const letterKeydownTransition = transition(
+    1,
+    0.9,
+    clampedProgress(0, 300, Date.now() - lastKeydownOrTouchTime),
+    easeOutQuart
+  );
+  const letterKeyupTransition = transition(
     0.9,
     1,
-    clampedProgress(0, 200, Date.now() - lastLetterUpdate),
-    easeInOutBack
+    clampedProgress(0, 300, Date.now() - lastLetterUpdate),
+    easeOutQuart
   );
 
   balls.forEach((ballA) => {
@@ -187,8 +216,10 @@ animate((deltaTime) => {
   CTX.textBaseline = "middle";
   const verticalAdjustment = Math.min(canvasHeight, canvasHeight) / 14;
   CTX.translate(canvasWidth / 2, canvasHeight / 2 + verticalAdjustment);
-  CTX.scale(sizeTransition, sizeTransition);
-  CTX.scale(letterChangeBounce, letterChangeBounce);
+  CTX.scale(gentleContinuousSizeTransition, gentleContinuousSizeTransition);
+  isKeyOrTouchDown
+    ? CTX.scale(letterKeydownTransition, letterKeydownTransition)
+    : CTX.scale(letterKeyupTransition, letterKeyupTransition);
   CTX.rotate(angleTransition);
   CTX.fillStyle = textColor;
   CTX.fillText(textString, 0, 0);
