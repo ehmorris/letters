@@ -31,6 +31,17 @@ const yellow = "#f5c347";
 const turquoise = "#8bcbf3";
 const white = "#fbfbf8";
 
+const [pluck1, pluck2, pluck3, pluck4, pluck5, pluck6] = [
+  new Audio("./sounds/pluck1.mp3"),
+  new Audio("./sounds/pluck2.mp3"),
+  new Audio("./sounds/pluck3.mp3"),
+  new Audio("./sounds/pluck4.mp3"),
+  new Audio("./sounds/pluck5.mp3"),
+  new Audio("./sounds/pluck6.mp3"),
+];
+
+const plucks = [pluck1, pluck2, pluck3, pluck4, pluck5, pluck6];
+
 let textString = "A";
 let lastLetterUpdate = Date.now();
 let isKeyOrTouchDown = false;
@@ -98,6 +109,7 @@ document.addEventListener("click", ({ clientX: x, clientY: y }) => {
 
     if (collidingBall) {
       collidingBall.pop();
+      plucks[Math.floor(Math.random() * plucks.length)].play();
       reduceNumber();
     }
   }
@@ -134,6 +146,7 @@ document.addEventListener(
       if (allCollidingBalls.length > 0) {
         allCollidingBalls.forEach((ball) => {
           ball.pop();
+          plucks[Math.floor(Math.random() * plucks.length)].play();
           reduceNumber();
         });
       } else {
