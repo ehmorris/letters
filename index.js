@@ -3,18 +3,18 @@ import {
   generateCanvas,
   transition,
   progress,
-  clampedProgress,
   degToRag,
   randomBetween,
   findBallAtPoint,
 } from "./helpers.js";
+import { makeSpring } from "./spring.js";
 import {
   makeBall,
   checkBallCollision,
   adjustBallPositions,
   resolveBallCollision,
 } from "./ball.js";
-import { easeInOutSine, easeOutQuart } from "./easings.js";
+import { easeInOutSine } from "./easings.js";
 
 const [CTX, canvasWidth, canvasHeight] = generateCanvas({
   width: window.innerWidth,
@@ -44,10 +44,15 @@ const plucks = [pluck1, pluck2, pluck3, pluck4, pluck5, pluck6];
 
 let textString = "A";
 let lastLetterUpdate = Date.now();
-let isKeyOrTouchDown = false;
-let lastKeydownOrTouchTime = Date.now();
 let textColor = pink;
 let balls = [];
+
+const scaleSpring = makeSpring(1, {
+  stiffness: 100,
+  damping: 10,
+  mass: 1.4,
+  precision: 350,
+});
 
 const isValidText = (text) => /^[a-zA-Z0-9]{1}$/.test(text);
 const isLetter = (text) => /[a-zA-Z]/.test(text);
@@ -117,13 +122,15 @@ document.addEventListener("click", ({ clientX: x, clientY: y }) => {
 
 document.addEventListener("keydown", ({ repeat }) => {
   if (!repeat) {
-    isKeyOrTouchDown = true;
-    lastKeydownOrTouchTime = Date.now();
+    scaleSpring.resetProps();
+    scaleSpring.setEndValue(0.9);
   }
 });
 
 document.addEventListener("keyup", ({ key }) => {
-  isKeyOrTouchDown = false;
+  scaleSpring.updateProps({ stiffness: 80, damping: 6, mass: 0.9 });
+  scaleSpring.setEndValue(1);
+
   if (Date.now() - lastLetterUpdate > debounceTime) {
     isValidText(key) ? updateText(key) : setRandomText();
   }
@@ -150,12 +157,12 @@ document.addEventListener(
           reduceNumber();
         });
       } else {
-        isKeyOrTouchDown = true;
-        lastKeydownOrTouchTime = Date.now();
+        scaleSpring.resetProps();
+        scaleSpring.setEndValue(0.9);
       }
     } else {
-      isKeyOrTouchDown = true;
-      lastKeydownOrTouchTime = Date.now();
+      scaleSpring.resetProps();
+      scaleSpring.setEndValue(0.9);
     }
     e.preventDefault();
   },
@@ -165,7 +172,9 @@ document.addEventListener(
 document.addEventListener(
   "touchend",
   (e) => {
-    isKeyOrTouchDown = false;
+    scaleSpring.updateProps({ stiffness: 80, damping: 6, mass: 0.9 });
+    scaleSpring.setEndValue(1);
+
     if (Date.now() - lastLetterUpdate > debounceTime) {
       setRandomText();
     }
@@ -180,6 +189,7 @@ document.addEventListener("touchmove", (e) => e.preventDefault(), {
 
 animate((deltaTime) => {
   CTX.clearRect(0, 0, canvasWidth, canvasHeight);
+  scaleSpring.update();
 
   const gentleContinuousSizeTransition = transition(
     0.97,
@@ -187,23 +197,11 @@ animate((deltaTime) => {
     progress(0, 1600, Date.now() - initTime),
     easeInOutSine
   );
-  const angleTransition = transition(
+  const continuousRotationTransition = transition(
     degToRag(-2),
     degToRag(2),
     progress(0, 1900, Date.now() - initTime),
     easeInOutSine
-  );
-  const letterKeydownTransition = transition(
-    1,
-    0.9,
-    clampedProgress(0, 300, Date.now() - lastKeydownOrTouchTime),
-    easeOutQuart
-  );
-  const letterKeyupTransition = transition(
-    0.9,
-    1,
-    clampedProgress(0, 300, Date.now() - lastLetterUpdate),
-    easeOutQuart
   );
 
   balls.forEach((ballA) => {
@@ -230,10 +228,8 @@ animate((deltaTime) => {
   const verticalAdjustment = Math.min(canvasHeight, canvasHeight) / 14;
   CTX.translate(canvasWidth / 2, canvasHeight / 2 + verticalAdjustment);
   CTX.scale(gentleContinuousSizeTransition, gentleContinuousSizeTransition);
-  isKeyOrTouchDown
-    ? CTX.scale(letterKeydownTransition, letterKeydownTransition)
-    : CTX.scale(letterKeyupTransition, letterKeyupTransition);
-  CTX.rotate(angleTransition);
+  CTX.scale(scaleSpring.getCurrentValue(), scaleSpring.getCurrentValue());
+  CTX.rotate(continuousRotationTransition);
   CTX.fillStyle = textColor;
   CTX.fillText(textString, 0, 0);
   CTX.restore();
