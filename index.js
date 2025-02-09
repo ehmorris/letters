@@ -15,6 +15,7 @@ import {
   resolveBallCollision,
 } from "./ball.js";
 import { easeInOutSine } from "./easings.js";
+import { allPaths, baselineHeight, widestWidth } from "./letterPaths.js";
 
 const [CTX, canvasWidth, canvasHeight] = generateCanvas({
   width: window.innerWidth,
@@ -222,15 +223,27 @@ animate((deltaTime) => {
   balls.forEach((b) => b.draw(deltaTime, 1));
 
   CTX.save();
-  CTX.font = `500 100vmin Ginto`;
-  CTX.textAlign = "center";
-  CTX.textBaseline = "middle";
-  const verticalAdjustment = Math.min(canvasHeight, canvasHeight) / 14;
-  CTX.translate(canvasWidth / 2, canvasHeight / 2 + verticalAdjustment);
+  const pathData = allPaths[textString];
+
+  // Centered rotation and scale operations
+  CTX.translate(canvasWidth / 2, canvasHeight / 2);
   CTX.scale(gentleContinuousSizeTransition, gentleContinuousSizeTransition);
   CTX.scale(scaleSpring.getCurrentValue(), scaleSpring.getCurrentValue());
   CTX.rotate(continuousRotationTransition);
+
+  // Letter placement, scaling, and rendering
+  const scaleMargins = 100;
+  const heightScaleFactor = Math.floor(
+    (canvasHeight - scaleMargins) / baselineHeight
+  );
+  const widthScaleFactor = Math.floor(
+    (canvasWidth - scaleMargins) / widestWidth
+  );
+  const scaleFactor = Math.min(heightScaleFactor, widthScaleFactor);
+  CTX.scale(scaleFactor, scaleFactor);
+  CTX.translate(-pathData.width / 2, -pathData.height / 2);
   CTX.fillStyle = textColor;
-  CTX.fillText(textString, 0, 0);
+  CTX.fill(new Path2D(pathData.path));
+
   CTX.restore();
 });
