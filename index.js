@@ -1,6 +1,6 @@
+import { makeCanvasManager } from "./canvas.js";
 import {
   animate,
-  generateCanvas,
   transition,
   progress,
   degToRag,
@@ -15,22 +15,27 @@ import {
   resolveBallCollision,
 } from "./ball.js";
 import { easeInOutSine } from "./easings.js";
-import { allPaths, baselineHeight, widestWidth } from "./letterPaths.js";
+import {
+  allPaths,
+  letterBoundingBoxHeight,
+  letterBoundingBoxWidth,
+} from "./letterPaths.js";
 
-const [CTX, canvasWidth, canvasHeight] = generateCanvas({
-  width: window.innerWidth,
-  height: window.innerHeight,
+const canvasManager = makeCanvasManager({
+  initialWidth: window.innerWidth,
+  initialHeight: window.innerHeight,
   attachNode: "#canvas",
 });
+const CTX = canvasManager.getContext();
 
 const initTime = Date.now();
 const debounceTime = 400;
 
-const pink = "#e79fae";
-const red = "#da4b34";
-const yellow = "#f5c347";
-const turquoise = "#8bcbf3";
-const white = "#fbfbf8";
+const pink = "#EA98AA";
+const red = "#DF432A";
+const yellow = "#F4BF2A";
+const turquoise = "#79CAEC";
+const white = "#FCF6E8";
 
 const [pluck1, pluck2, pluck3, pluck4, pluck5, pluck6] = [
   new Audio("./sounds/pluck1.mp3"),
@@ -47,6 +52,8 @@ let textString = "A";
 let lastLetterUpdate = Date.now();
 let textColor = pink;
 let balls = [];
+let hasKeyboard = false;
+// let correctKeyEntered = false;
 
 const scaleSpring = makeSpring(1, {
   stiffness: 100,
@@ -67,8 +74,11 @@ const updateText = (newText) => {
 
   if (isNumber(newText)) {
     const number = parseInt(newText);
-    const widthRequiredForEachBall = canvasWidth / number;
-    const maxSize = Math.min(canvasWidth / 4, canvasHeight / 3);
+    const widthRequiredForEachBall = canvasManager.getWidth() / number;
+    const maxSize = Math.min(
+      canvasManager.getWidth() / 4,
+      canvasManager.getHeight() / 3
+    );
     const minSize = 44;
     const radius = Math.max(
       minSize,
@@ -76,10 +86,16 @@ const updateText = (newText) => {
     );
 
     balls = new Array(number).fill().map(() =>
-      makeBall(CTX, canvasWidth, canvasHeight, {
+      makeBall(CTX, canvasManager.getWidth(), canvasManager.getHeight(), {
         startPosition: {
-          x: randomBetween(canvasWidth / 8, canvasWidth - canvasWidth / 8),
-          y: randomBetween(canvasHeight / 8, canvasHeight - canvasHeight / 8),
+          x: randomBetween(
+            canvasManager.getWidth() / 8,
+            canvasManager.getWidth() - canvasManager.getWidth() / 8
+          ),
+          y: randomBetween(
+            canvasManager.getHeight() / 8,
+            canvasManager.getHeight() - canvasManager.getHeight() / 8
+          ),
         },
         startVelocity: {
           x: randomBetween(-6, 6),
@@ -129,6 +145,7 @@ document.addEventListener("keydown", ({ repeat }) => {
 });
 
 document.addEventListener("keyup", ({ key }) => {
+  // hasKeyboard = true;
   scaleSpring.updateProps({ stiffness: 80, damping: 6, mass: 0.9 });
   scaleSpring.setEndValue(1);
 
@@ -188,8 +205,8 @@ document.addEventListener("touchmove", (e) => e.preventDefault(), {
   passive: false,
 });
 
-animate((deltaTime) => {
-  CTX.clearRect(0, 0, canvasWidth, canvasHeight);
+animate((deltaTime, timeElapsed) => {
+  CTX.clearRect(0, 0, canvasManager.getWidth(), canvasManager.getHeight());
   scaleSpring.update();
 
   const gentleContinuousSizeTransition = transition(
@@ -219,31 +236,33 @@ animate((deltaTime) => {
       });
     }
   });
-
   balls.forEach((b) => b.draw(deltaTime, 1));
 
-  CTX.save();
-  const pathData = allPaths[textString];
+  canvasManager.drawBlock((CTX) => {
+    // Centered rotation and scale operations
+    CTX.translate(canvasManager.getWidth() / 2, canvasManager.getHeight() / 2);
+    CTX.scale(gentleContinuousSizeTransition, gentleContinuousSizeTransition);
+    CTX.scale(scaleSpring.getCurrentValue(), scaleSpring.getCurrentValue());
+    CTX.rotate(continuousRotationTransition);
 
-  // Centered rotation and scale operations
-  CTX.translate(canvasWidth / 2, canvasHeight / 2);
-  CTX.scale(gentleContinuousSizeTransition, gentleContinuousSizeTransition);
-  CTX.scale(scaleSpring.getCurrentValue(), scaleSpring.getCurrentValue());
-  CTX.rotate(continuousRotationTransition);
+    // Letter placement, scaling, and rendering
+    const scaleFactor = Math.min(
+      canvasManager.getHeight() / letterBoundingBoxHeight,
+      canvasManager.getWidth() / letterBoundingBoxWidth
+    );
+    CTX.scale(scaleFactor, scaleFactor);
+    CTX.translate(-letterBoundingBoxWidth / 2, -letterBoundingBoxHeight / 2);
 
-  // Letter placement, scaling, and rendering
-  const scaleMargins = 100;
-  const heightScaleFactor = Math.floor(
-    (canvasHeight - scaleMargins) / baselineHeight
-  );
-  const widthScaleFactor = Math.floor(
-    (canvasWidth - scaleMargins) / widestWidth
-  );
-  const scaleFactor = Math.min(heightScaleFactor, widthScaleFactor);
-  CTX.scale(scaleFactor, scaleFactor);
-  CTX.translate(-pathData.width / 2, -pathData.height / 2);
-  CTX.fillStyle = textColor;
-  CTX.fill(new Path2D(pathData.path));
-
-  CTX.restore();
+    if (hasKeyboard) {
+      CTX.strokeStyle = textColor;
+      CTX.lineCap = "round";
+      CTX.lineJoin = "round";
+      CTX.setLineDash([4, 3]);
+      CTX.lineDashOffset = timeElapsed / 500;
+      CTX.stroke(new Path2D(allPaths[textString]));
+    } else {
+      CTX.fillStyle = textColor;
+      CTX.fill(new Path2D(allPaths[textString]));
+    }
+  });
 });
