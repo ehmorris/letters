@@ -47,6 +47,10 @@ export const makeBall = (
   };
 
   const pop = () => {
+    // Two fingers can land on the same ball in one touchstart. Without this
+    // the pop animation restarts and the ball counts as popped twice
+    if (popped) return;
+
     popped = true;
     poppedTime = Date.now();
     poppedPieces = new Array(numberOfPopPieces).fill().map(() => {
@@ -95,10 +99,21 @@ export const makeBall = (
     }
   };
 
+  // Balls bounce off the canvas size they were made with, so shrinking the
+  // window can strand one out of reach past the new edge
+  const setCanvasSize = (width, height) => {
+    canvasWidth = width;
+    canvasHeight = height;
+    position.x = Math.min(Math.max(radius, position.x), canvasWidth - radius);
+    position.y = Math.min(Math.max(radius, position.y), canvasHeight - radius);
+    poppedPieces.forEach((p) => p.setCanvasSize(width, height));
+  };
+
   return {
     update,
     draw,
     pop,
+    setCanvasSize,
     getPosition: () => position,
     getVelocity: () => velocity,
     isPopped: () => popped,
