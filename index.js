@@ -15,6 +15,7 @@ import {
   resolveBallCollision,
 } from "./ball.js";
 import { easeInOutSine } from "./easings.js";
+import { makeRandomSoundPlayer } from "./audio.js";
 import {
   allPaths,
   letterBoundingBoxHeight,
@@ -37,16 +38,14 @@ const yellow = "#F4BF2A";
 const turquoise = "#79CAEC";
 const white = "#FCF6E8";
 
-const [pluck1, pluck2, pluck3, pluck4, pluck5, pluck6] = [
-  new Audio("./sounds/pluck1.mp3"),
-  new Audio("./sounds/pluck2.mp3"),
-  new Audio("./sounds/pluck3.mp3"),
-  new Audio("./sounds/pluck4.mp3"),
-  new Audio("./sounds/pluck5.mp3"),
-  new Audio("./sounds/pluck6.mp3"),
-];
-
-const plucks = [pluck1, pluck2, pluck3, pluck4, pluck5, pluck6];
+const playPluck = makeRandomSoundPlayer([
+  "./sounds/pluck1.mp3",
+  "./sounds/pluck2.mp3",
+  "./sounds/pluck3.mp3",
+  "./sounds/pluck4.mp3",
+  "./sounds/pluck5.mp3",
+  "./sounds/pluck6.mp3",
+]);
 
 let textString = "A";
 let lastLetterUpdate = Date.now();
@@ -114,27 +113,38 @@ const updateText = (newText) => {
   lastLetterUpdate = Date.now();
 };
 
-const reduceNumber = () => {
-  const newNumber = parseInt(textString) - 1;
-  textString = newNumber.toString();
+const unpoppedBalls = () => balls.filter((ball) => !ball.isPopped());
+
+// The number on screen is whatever is left to pop, rather than its own
+// countdown that can drift out of sync with the balls
+const syncNumberToBalls = () => {
+  textString = unpoppedBalls().length.toString();
   lastLetterUpdate = Date.now();
 };
 
+const popBalls = (ballsToPop) => {
+  ballsToPop.forEach((ball) => {
+    ball.pop();
+    playPluck();
+  });
+
+  syncNumberToBalls();
+};
+
+// Missing a ball shouldn't wipe the screen and start over. Once balls are out
+// there, the only way forward is to pop all of them
+const canChangeText = () =>
+  unpoppedBalls().length === 0 && Date.now() - lastLetterUpdate > debounceTime;
+
 const setRandomText = () => {
-  const options = "ABCDEFGHIJKLMNOPQRSTUVQXYZ0123456789";
+  const options = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
   updateText(options.split("")[Math.floor(Math.random() * options.length)]);
 };
 
 document.addEventListener("click", ({ clientX: x, clientY: y }) => {
-  if (isNumber(textString) && parseInt(textString) > 0) {
-    const collidingBall = findBallAtPoint(balls, { x, y });
+  const collidingBall = findBallAtPoint(balls, { x, y });
 
-    if (collidingBall) {
-      collidingBall.pop();
-      plucks[Math.floor(Math.random() * plucks.length)].play();
-      reduceNumber();
-    }
-  }
+  if (collidingBall) popBalls([collidingBall]);
 });
 
 document.addEventListener("keydown", ({ repeat }) => {
@@ -149,7 +159,7 @@ document.addEventListener("keyup", ({ key }) => {
   scaleSpring.updateProps({ stiffness: 80, damping: 6, mass: 0.9 });
   scaleSpring.setEndValue(1);
 
-  if (Date.now() - lastLetterUpdate > debounceTime) {
+  if (canChangeText()) {
     isValidText(key) ? updateText(key) : setRandomText();
   }
 });
@@ -157,31 +167,25 @@ document.addEventListener("keyup", ({ key }) => {
 document.addEventListener(
   "touchstart",
   (e) => {
-    if (isNumber(textString) && parseInt(textString) > 0) {
-      const allCollidingBalls = [];
-      for (let index = 0; index < e.touches.length; index++) {
-        const collidingBall = findBallAtPoint(balls, {
-          x: e.touches[index].clientX,
-          y: e.touches[index].clientY,
-        });
+    // A Set because two fingers can land on the same ball
+    const allCollidingBalls = new Set();
 
-        if (collidingBall) allCollidingBalls.push(collidingBall);
-      }
+    for (let index = 0; index < e.touches.length; index++) {
+      const collidingBall = findBallAtPoint(balls, {
+        x: e.touches[index].clientX,
+        y: e.touches[index].clientY,
+      });
 
-      if (allCollidingBalls.length > 0) {
-        allCollidingBalls.forEach((ball) => {
-          ball.pop();
-          plucks[Math.floor(Math.random() * plucks.length)].play();
-          reduceNumber();
-        });
-      } else {
-        scaleSpring.resetProps();
-        scaleSpring.setEndValue(0.9);
-      }
+      if (collidingBall) allCollidingBalls.add(collidingBall);
+    }
+
+    if (allCollidingBalls.size > 0) {
+      popBalls([...allCollidingBalls]);
     } else {
       scaleSpring.resetProps();
       scaleSpring.setEndValue(0.9);
     }
+
     e.preventDefault();
   },
   { passive: false }
@@ -193,7 +197,7 @@ document.addEventListener(
     scaleSpring.updateProps({ stiffness: 80, damping: 6, mass: 0.9 });
     scaleSpring.setEndValue(1);
 
-    if (Date.now() - lastLetterUpdate > debounceTime) {
+    if (canChangeText()) {
       setRandomText();
     }
     e.preventDefault();
@@ -203,6 +207,14 @@ document.addEventListener(
 
 document.addEventListener("touchmove", (e) => e.preventDefault(), {
   passive: false,
+});
+
+// Balls have to stay tappable now that they gate the next letter. The canvas
+// manager registers its own resize listener first, so the size is already new
+window.addEventListener("resize", () => {
+  balls.forEach((ball) =>
+    ball.setCanvasSize(canvasManager.getWidth(), canvasManager.getHeight())
+  );
 });
 
 animate((deltaTime, timeElapsed) => {
