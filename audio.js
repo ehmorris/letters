@@ -1,53 +1,78 @@
-// A browser won't restart an <audio> element that's already playing, and
-// calling play() on one is a silent no-op. Two pops close together — or a
-// multi-touch pop — would drop sounds, so every sound gets a small pool of
-// voices that can overlap.
-const maxVoicesPerSound = 4;
+// Sounds are decoded once into AudioBuffers and played through throwaway
+// AudioBufferSourceNodes. An <audio> element goes through the media pipeline
+// every time it starts, which stalls the main thread for milliseconds — most
+// noticeably when several pops land at once, which is exactly what a
+// multi-finger pop does
+const pluckPaths = [
+  "./sounds/pluck1.mp3",
+  "./sounds/pluck2.mp3",
+  "./sounds/pluck3.mp3",
+  "./sounds/pluck4.mp3",
+  "./sounds/pluck5.mp3",
+  "./sounds/pluck6.mp3",
+];
 
-const makeSound = (path) => {
-  const firstVoice = new Audio(path);
-  firstVoice.preload = "auto";
+export const makeAudioManager = () => {
+  let hasInitialized = false;
+  let audioCTX;
+  let silenceAudio;
+  // These hold promises, not buffers, so a sound triggered before its file has
+  // finished decoding still plays once it's ready
+  let pluckBuffers = [];
+  let lastPluckIndex = null;
 
-  const voices = [firstVoice];
-  let stealIndex = 0;
+  async function _loadFile(context, filePath) {
+    const response = await fetch(filePath);
+    const arrayBuffer = await response.arrayBuffer();
+    return context.decodeAudioData(arrayBuffer);
+  }
 
-  return () => {
-    let voice = voices.find((v) => v.paused || v.ended);
+  // Call this from inside a user gesture. Decoding every pluck up front is what
+  // keeps the first pop of a session from being the slowest one
+  const initialize = () => {
+    if (hasInitialized) return;
+    hasInitialized = true;
 
-    // Clone instead of building from the path again so the browser can reuse
-    // the audio data it already fetched
-    if (!voice && voices.length < maxVoicesPerSound) {
-      voice = firstVoice.cloneNode();
-      voices.push(voice);
-    }
+    // Playing silence in a loop in the background through the HTML audio API
+    // routes Web Audio to the main sound channel on iOS, rather than the
+    // ringer channel
+    silenceAudio = new Audio("./sounds/silence.mp3");
+    silenceAudio.loop = true;
+    silenceAudio.play().catch(() => {});
 
-    // Every voice is busy, so cut off the oldest one
-    if (!voice) {
-      voice = voices[stealIndex];
-      stealIndex = (stealIndex + 1) % voices.length;
-    }
-
-    // Safari throws if currentTime is set before metadata has loaded
-    if (voice.readyState > 0) voice.currentTime = 0;
-
-    // play() rejects when the browser blocks playback outside a user gesture,
-    // or when a voice is retriggered mid load. Neither is recoverable, and an
-    // unhandled rejection just fills the console with noise
-    voice.play().catch(() => {});
+    audioCTX = new AudioContext();
+    pluckBuffers = pluckPaths.map((path) => _loadFile(audioCTX, path));
   };
-};
 
-export const makeRandomSoundPlayer = (paths) => {
-  const sounds = paths.map(makeSound);
-  let lastIndex = -1;
+  async function _playTrack(audioBuffer, loop = false) {
+    if (!hasInitialized) initialize();
 
-  return () => {
-    let index = Math.floor(Math.random() * sounds.length);
+    try {
+      const [, buffer] = await Promise.all([audioCTX.resume(), audioBuffer]);
+      const trackSource = new AudioBufferSourceNode(audioCTX, { buffer, loop });
+      trackSource.connect(audioCTX.destination);
+      trackSource.start();
+      return trackSource;
+    } catch (e) {
+      // A blocked context or a file that failed to decode isn't recoverable,
+      // and an unhandled rejection just fills the console with noise
+    }
+  }
 
-    // The same pluck twice in a row reads as a missed sound
-    if (index === lastIndex) index = (index + 1) % sounds.length;
+  // Stepping through the plucks in order reads as deliberate when a handful of
+  // balls pop together. Picking at random reads like a mistake
+  const playSequentialPluck = () => {
+    if (!pluckBuffers.length) return;
 
-    lastIndex = index;
-    sounds[index]();
+    lastPluckIndex =
+      lastPluckIndex === null
+        ? 0
+        : (lastPluckIndex + 1) % pluckBuffers.length;
+
+    _playTrack(pluckBuffers[lastPluckIndex]);
   };
+
+  const resetPluckSequence = () => (lastPluckIndex = null);
+
+  return { initialize, playSequentialPluck, resetPluckSequence };
 };

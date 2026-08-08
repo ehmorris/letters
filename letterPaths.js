@@ -112,3 +112,12 @@ export const allPaths = {
   8: eight,
   9: nine,
 };
+
+// The draw loop needs a Path2D on every frame, and parsing a path string of
+// this size 60 times a second is pure waste. Build them all once instead
+export const allPathObjects = Object.fromEntries(
+  Object.entries(allPaths).map(([character, path]) => [
+    character,
+    new Path2D(path),
+  ])
+);

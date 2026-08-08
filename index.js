@@ -15,9 +15,9 @@ import {
   resolveBallCollision,
 } from "./ball.js";
 import { easeInOutSine } from "./easings.js";
-import { makeRandomSoundPlayer } from "./audio.js";
+import { makeAudioManager } from "./audio.js";
 import {
-  allPaths,
+  allPathObjects,
   letterBoundingBoxHeight,
   letterBoundingBoxWidth,
 } from "./letterPaths.js";
@@ -38,14 +38,7 @@ const yellow = "#F4BF2A";
 const turquoise = "#79CAEC";
 const white = "#FCF6E8";
 
-const playPluck = makeRandomSoundPlayer([
-  "./sounds/pluck1.mp3",
-  "./sounds/pluck2.mp3",
-  "./sounds/pluck3.mp3",
-  "./sounds/pluck4.mp3",
-  "./sounds/pluck5.mp3",
-  "./sounds/pluck6.mp3",
-]);
+const audioManager = makeAudioManager();
 
 let textString = "A";
 let lastLetterUpdate = Date.now();
@@ -85,7 +78,7 @@ const updateText = (newText) => {
     );
 
     balls = new Array(number).fill().map(() =>
-      makeBall(CTX, canvasManager.getWidth(), canvasManager.getHeight(), {
+      makeBall(canvasManager, {
         startPosition: {
           x: randomBetween(
             canvasManager.getWidth() / 8,
@@ -125,7 +118,7 @@ const syncNumberToBalls = () => {
 const popBalls = (ballsToPop) => {
   ballsToPop.forEach((ball) => {
     ball.pop();
-    playPluck();
+    audioManager.playSequentialPluck();
   });
 
   syncNumberToBalls();
@@ -140,6 +133,14 @@ const setRandomText = () => {
   const options = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
   updateText(options.split("")[Math.floor(Math.random() * options.length)]);
 };
+
+// An audio context can only be started from inside a user gesture, and
+// decoding every pluck up front keeps the first pop from being the slowest one
+["click", "keydown", "touchstart"].forEach((eventName) =>
+  document.addEventListener(eventName, () => audioManager.initialize(), {
+    once: true,
+  })
+);
 
 document.addEventListener("click", ({ clientX: x, clientY: y }) => {
   const collidingBall = findBallAtPoint(balls, { x, y });
@@ -209,14 +210,6 @@ document.addEventListener("touchmove", (e) => e.preventDefault(), {
   passive: false,
 });
 
-// Balls have to stay tappable now that they gate the next letter. The canvas
-// manager registers its own resize listener first, so the size is already new
-window.addEventListener("resize", () => {
-  balls.forEach((ball) =>
-    ball.setCanvasSize(canvasManager.getWidth(), canvasManager.getHeight())
-  );
-});
-
 animate((deltaTime, timeElapsed) => {
   CTX.clearRect(0, 0, canvasManager.getWidth(), canvasManager.getHeight());
   scaleSpring.update();
@@ -234,21 +227,26 @@ animate((deltaTime, timeElapsed) => {
     easeInOutSine
   );
 
+  // Drawing a ball is what moves it, so collisions get resolved against where
+  // everything came to rest on the previous frame
   balls.forEach((ballA) => {
-    if (!ballA.isPopped()) {
-      ballA.update(deltaTime);
-      balls.forEach((ballB) => {
-        if (!ballB.isPopped() && ballA !== ballB) {
-          const collision = checkBallCollision(ballA, ballB);
-          if (collision[0]) {
-            adjustBallPositions(ballA, ballB, collision[1]);
-            resolveBallCollision(ballA, ballB);
-          }
+    if (ballA.isPopped()) return;
+
+    balls.forEach((ballB) => {
+      if (!ballB.isPopped() && ballA !== ballB) {
+        const collision = checkBallCollision(ballA, ballB);
+        if (collision[0]) {
+          adjustBallPositions(ballA, ballB, collision[1]);
+          resolveBallCollision(ballA, ballB);
         }
-      });
-    }
+      }
+    });
   });
-  balls.forEach((b) => b.draw(deltaTime, 1));
+  balls.forEach((b) => b.draw(deltaTime));
+
+  // A ball that's finished popping is still walked by the collision loop and
+  // still handed to draw until it's out of the array
+  balls = balls.filter((ball) => !ball.isGone());
 
   canvasManager.drawBlock((CTX) => {
     // Centered rotation and scale operations
@@ -271,10 +269,10 @@ animate((deltaTime, timeElapsed) => {
       CTX.lineJoin = "round";
       CTX.setLineDash([4, 3]);
       CTX.lineDashOffset = timeElapsed / 500;
-      CTX.stroke(new Path2D(allPaths[textString]));
+      CTX.stroke(allPathObjects[textString]);
     } else {
       CTX.fillStyle = textColor;
-      CTX.fill(new Path2D(allPaths[textString]));
+      CTX.fill(allPathObjects[textString]);
     }
   });
 });
