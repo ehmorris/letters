@@ -67,9 +67,6 @@ let celebrationStart = 0;
 let wordCompleteStart = 0;
 let lastStepChange = Date.now();
 let lastFireworkLaunch = 0;
-// A keyboard turns spelling into typing: the letter becomes an outline to fill
-// in, and only the right key moves the word along
-let hasKeyboard = false;
 
 const scaleSpring = makeSpring(1, {
   stiffness: 100,
@@ -234,8 +231,6 @@ document.addEventListener("click", ({ clientX: x, clientY: y }) => {
 });
 
 document.addEventListener("keydown", ({ repeat }) => {
-  hasKeyboard = true;
-
   if (gameState !== playing) return;
 
   // Every key gets the squash, right or wrong, so a miss still feels like
@@ -334,7 +329,7 @@ const drawSpellingProgress = () => {
   });
 };
 
-animate((deltaTime, timeElapsed) => {
+animate((deltaTime) => {
   CTX.clearRect(0, 0, canvasManager.getWidth(), canvasManager.getHeight());
   scaleSpring.update();
 
@@ -429,14 +424,6 @@ animate((deltaTime, timeElapsed) => {
 
       if (isWord) {
         fillWord(CTX, displayText, textColor);
-      } else if (hasKeyboard && sequence.getStep() === spelling) {
-        // An outline to fill in, rather than an answer to look at
-        CTX.strokeStyle = textColor;
-        CTX.lineCap = "round";
-        CTX.lineJoin = "round";
-        CTX.setLineDash([4, 3]);
-        CTX.lineDashOffset = timeElapsed / 500;
-        CTX.stroke(allPathObjects[displayText]);
       } else {
         CTX.fillStyle = textColor;
         CTX.fill(allPathObjects[displayText]);

@@ -140,8 +140,9 @@ const inkWidths = {
   "!": 15,
 };
 
-// Space between one letter's ink and the next
-const letterTracking = 18;
+// Space between one letter's ink and the next. Tight enough that a word reads
+// as one thing rather than a row of letters that happen to be adjacent
+const letterTracking = 9;
 
 const advanceFor = (character) =>
   (inkWidths[character] || letterBoundingBoxWidth) + letterTracking;

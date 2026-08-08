@@ -61,37 +61,38 @@ canvas {
   display: none;
 }
 
-.start-title {
-  margin: 0;
-  font-size: clamp(2.75rem, 13vw, 4.5rem);
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: var(--yellow);
-}
-
-.start-hint {
-  margin: 0.25rem 0 2rem;
+.start-label {
+  margin: 0 0 1.5rem;
   font-size: 0.9375rem;
+  letter-spacing: 0.06em;
   color: rgba(252, 246, 232, 0.6);
 }
 
 .durations {
-  display: flex;
-  gap: clamp(0.375rem, 2vw, 0.875rem);
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  gap: clamp(0.75rem, 4vw, 1.5rem);
   justify-content: center;
 }
 
 /* The choices are balls, same as the ones in the game */
 .duration {
-  width: clamp(3rem, 15vw, 5rem);
+  width: clamp(5rem, 34vw, 8.5rem);
   aspect-ratio: 1;
   border: 0;
   border-radius: 50%;
-  font: 800 clamp(1.25rem, 5.75vw, 2rem) / 1 system-ui, -apple-system, sans-serif;
+  font: 800 clamp(2rem, 13vw, 3.25rem) / 1 system-ui, -apple-system, sans-serif;
   color: var(--blue);
   cursor: pointer;
   touch-action: manipulation;
   transition: transform 120ms ease-out;
+}
+
+/* An odd number of choices leaves the last one on its own, so it takes the
+   whole row rather than sitting in a corner of it */
+.duration:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+  justify-self: center;
 }
 
 .duration:nth-child(1) {
