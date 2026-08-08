@@ -1,6 +1,8 @@
+import { makeGlyphSvg } from "./glyphElement.js";
+
 // A parent sets this before handing the phone over. The readout is a DOM node
-// rather than canvas text: the canvas draws SVG letterforms and has no fonts
-// in it, and the DOM gets safe area insets and crisp small text for free
+// so it gets safe area insets for free, but it's set in the game's own
+// letterforms rather than a system font
 export const makeTimer = (element) => {
   let durationMs = 0;
   let startTime = null;
@@ -38,9 +40,13 @@ export const makeTimer = (element) => {
     // all sixty frames a second
     if (totalSeconds !== lastRenderedSecond) {
       lastRenderedSecond = totalSeconds;
-      element.textContent = `${Math.floor(totalSeconds / 60)}:${String(
+
+      const readout = `${Math.floor(totalSeconds / 60)}:${String(
         totalSeconds % 60
       ).padStart(2, "0")}`;
+
+      element.setAttribute("aria-label", `${readout} remaining`);
+      element.replaceChildren(makeGlyphSvg(readout, { tabularDigits: true }));
     }
 
     if (remaining <= 0) {

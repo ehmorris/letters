@@ -1,3 +1,5 @@
+import { randomBetween } from "./helpers.js";
+
 // Short, concrete things a small kid already has a picture of in their head.
 // Between them these use every letter of the alphabet, including the ones a
 // pile of three letter words would never reach
@@ -42,8 +44,13 @@ const words = [
 const names = ["MILES", "CARY"];
 
 // Your own name showing up once every time a 35 word deck runs out isn't often
-// enough when you're the one it belongs to
-const wordsBetweenNames = 3;
+// enough when you're the one it belongs to. But on a fixed beat it gets
+// predictable, so the gap moves around and a session doesn't always open on one
+const fewestWordsBetweenNames = 2;
+const mostWordsBetweenNames = 4;
+
+const wordsUntilNextName = () =>
+  Math.round(randomBetween(fewestWordsBetweenNames, mostWordsBetweenNames));
 
 const shuffle = (items) => {
   const shuffled = [...items];
@@ -64,18 +71,18 @@ const shuffle = (items) => {
 export const makeWordPicker = () => {
   let deck = [];
   let nameDeck = [];
-  // Start high so the very first word of a session is a name
-  let sinceLastName = wordsBetweenNames;
+  // Some sessions open on a name, some work up to one
+  let wordsUntilName = Math.round(randomBetween(0, mostWordsBetweenNames));
 
   return {
     next: () => {
-      if (sinceLastName >= wordsBetweenNames) {
-        sinceLastName = 0;
+      if (wordsUntilName <= 0) {
+        wordsUntilName = wordsUntilNextName();
         if (!nameDeck.length) nameDeck = shuffle(names);
         return nameDeck.pop();
       }
 
-      sinceLastName++;
+      wordsUntilName--;
       if (!deck.length) deck = shuffle(words);
       return deck.pop();
     },

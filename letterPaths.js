@@ -77,6 +77,10 @@ const zero =
 const exclamation =
   "m47 31.5c0-4.1421 3.3579-7.5 7.5-7.5s7.5 3.3579 7.5 7.5l-2 34.5c0 3.0376-2.4624 5.5-5.5 5.5s-5.5-2.4624-5.5-5.5zm0 54c0-4.1421 3.3579-7.5 7.5-7.5s7.5 3.3579 7.5 7.5-3.3579 7.5-7.5 7.5-7.5-3.3579-7.5-7.5z";
 
+// The same dot twice, for the countdown clock
+const colon =
+  "m47 45c0-4.1421 3.3579-7.5 7.5-7.5s7.5 3.3579 7.5 7.5-3.3579 7.5-7.5 7.5-7.5-3.3579-7.5-7.5zm0 37c0-4.1421 3.3579-7.5 7.5-7.5s7.5 3.3579 7.5 7.5-3.3579 7.5-7.5 7.5-7.5-3.3579-7.5-7.5z";
+
 export const letterBoundingBoxHeight = 115;
 export const letterBoundingBoxWidth = 109;
 export const allPaths = {
@@ -117,6 +121,7 @@ export const allPaths = {
   8: eight,
   9: nine,
   "!": exclamation,
+  ":": colon,
 };
 
 // The draw loop needs a Path2D on every frame, and parsing a path string of
@@ -137,18 +142,52 @@ const inkWidths = {
   J: 46, K: 55, L: 45, M: 72, N: 57, O: 65, P: 51, Q: 65, R: 52,
   S: 54, T: 55, U: 57, V: 61, W: 86, X: 56, Y: 58, Z: 53,
   0: 55, 1: 33, 2: 50, 3: 51, 4: 56, 5: 51, 6: 53, 7: 49, 8: 55, 9: 53,
-  "!": 15,
+  "!": 15, ":": 15,
 };
 
 // Space between one letter's ink and the next. Tight enough that a word reads
 // as one thing rather than a row of letters that happen to be adjacent
 const letterTracking = 9;
 
-const advanceFor = (character) =>
-  (inkWidths[character] || letterBoundingBoxWidth) + letterTracking;
+// Every digit is drawn centered in the same box, so giving them all the widest
+// one's advance costs nothing and makes them tabular — which is what keeps a
+// countdown from shuffling sideways every time a 1 ticks over to a 2
+const widestDigitInkWidth = 56;
+const isDigit = (character) => character >= "0" && character <= "9";
 
-export const wordBoundingBoxWidth = (word) =>
-  word.split("").reduce((total, character) => total + advanceFor(character), 0);
+export const advanceFor = (character, { tabularDigits = false } = {}) =>
+  (tabularDigits && isDigit(character)
+    ? widestDigitInkWidth
+    : inkWidths[character] || letterBoundingBoxWidth) + letterTracking;
+
+// Ink width spacing assumes both letters have a flat edge facing each other.
+// Where they slope apart instead — the V and A of VAN, the A and T of HAT —
+// it leaves a hole. These are measured per pair: the gap between the two
+// glyphs is sampled down every scanline, then closed up until the pair reads
+// like a pair of straight stems does, stopping before the ink can collide
+const kerningPairs = {
+  AL: -5, AT: -22, BI: -5, CA: -6, CK: -5, CO: -5, ES: -6, IG: -10,
+  IL: -5, IS: -7, OS: -5, OW: -8, OX: -8, PI: -7, RY: -6, ST: -8,
+  TA: -22, VA: -15, "G!": -5,
+};
+
+// The step from one glyph's origin to the next. A tabular readout wants its
+// columns to line up more than it wants good fit, so it skips the kerning
+export const advanceAt = (word, index, { tabularDigits = false } = {}) => {
+  const character = word[index];
+  const next = word[index + 1];
+  const kern =
+    tabularDigits || next === undefined
+      ? 0
+      : kerningPairs[character + next] || 0;
+
+  return advanceFor(character, { tabularDigits }) + kern;
+};
+
+export const wordBoundingBoxWidth = (word, options) =>
+  word
+    .split("")
+    .reduce((total, _, index) => total + advanceAt(word, index, options), 0);
 
 // Draws a word with its top left at the origin, in the same units a single
 // glyph uses. `fill` takes either a color or a function of the letter's index,
@@ -158,17 +197,17 @@ export const fillWord = (CTX, word, fill) => {
 
   word.split("").forEach((character, index) => {
     const path = allPathObjects[character];
-    const advance = advanceFor(character);
 
     if (path) {
       CTX.save();
-      CTX.translate((advance - letterBoundingBoxWidth) / 2, 0);
+      // Centered in its own slot, before any kerning moves the next one in
+      CTX.translate((advanceFor(character) - letterBoundingBoxWidth) / 2, 0);
       CTX.fillStyle = typeof fill === "function" ? fill(index) : fill;
       CTX.fill(path);
       CTX.restore();
     }
 
-    CTX.translate(advance, 0);
+    CTX.translate(advanceAt(word, index), 0);
   });
 
   CTX.restore();

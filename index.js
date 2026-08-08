@@ -47,9 +47,14 @@ const debounceTime = 400;
 
 const wordEntranceDuration = 900;
 
-// A session ends with a fireworks show rather than a screen that just stops
+// A session ends with a fireworks show rather than a screen that just stops.
+// Eight at a time is what bubbles launches, and since each one carries its own
+// delay of up to 1.2s a batch steps itself out rather than going up as a wall
+const fireworksPerBatch = 8;
 const celebrationDuration = 9000;
-const fireworkLaunchInterval = 800;
+// Long enough that a batch has mostly finished before the next one goes up.
+// Stacking them closer just puts more on screen at once than anyone can watch
+const fireworkLaunchInterval = 2600;
 
 const audioManager = makeAudioManager();
 const sequence = makeSequence();
@@ -124,7 +129,7 @@ const showCurrentStep = () => {
     textColor = yellow;
     balls = [];
     wordCompleteStart = Date.now();
-    addFireworks(2);
+    addFireworks(fireworksPerBatch);
   } else {
     const number = sequence.getInterludeNumber();
     displayText = String(number);
@@ -193,7 +198,7 @@ const startCelebration = () => {
   displayText = "";
   balls = [];
   fireworks = [];
-  addFireworks(3);
+  addFireworks(fireworksPerBatch);
 };
 
 const endSession = () => {
@@ -344,7 +349,7 @@ animate((deltaTime) => {
       celebrationElapsed < celebrationDuration - 3500 &&
       Date.now() - lastFireworkLaunch > fireworkLaunchInterval
     ) {
-      addFireworks(3);
+      addFireworks(fireworksPerBatch);
     }
 
     if (celebrationElapsed > celebrationDuration) endSession();

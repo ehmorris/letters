@@ -112,33 +112,31 @@ export const makeBall = (
       };
     });
 
-    // Sparks are the part that actually reads as a firework: long thin embers
-    // thrown clear of the burst and falling slowly
-    sparks = radialPop
-      ? new Array(16).fill().map(() => {
-          const randomAngle = Math.random() * Math.PI * 2;
-          const randomLength = randomBetween(20, 50);
-          const randomSpeedMultiplier = randomBetween(8, 16);
+    // Long thin embers thrown clear of the burst and falling slowly. Every pop
+    // gets them, a tapped ball the same as a firework
+    sparks = new Array(16).fill().map(() => {
+      const randomAngle = Math.random() * Math.PI * 2;
+      const randomLength = randomBetween(20, 50);
+      const randomSpeedMultiplier = randomBetween(8, 16);
 
-          return makeParticle(canvasManager, {
-            radius: randomLength,
-            startPosition: {
-              x: baseParticle.getPosition().x + Math.cos(randomAngle) * radius,
-              y: baseParticle.getPosition().y + Math.sin(randomAngle) * radius,
-            },
-            startVelocity: {
-              x:
-                transferringVelocity.x / 3 +
-                Math.cos(randomAngle) * randomSpeedMultiplier,
-              y:
-                transferringVelocity.y / 3 +
-                Math.sin(randomAngle) * randomSpeedMultiplier,
-            },
-            gravity: 0.02,
-            terminalVelocity: 110,
-          });
-        })
-      : [];
+      return makeParticle(canvasManager, {
+        radius: randomLength,
+        startPosition: {
+          x: baseParticle.getPosition().x + Math.cos(randomAngle) * radius,
+          y: baseParticle.getPosition().y + Math.sin(randomAngle) * radius,
+        },
+        startVelocity: {
+          x:
+            transferringVelocity.x / 3 +
+            Math.cos(randomAngle) * randomSpeedMultiplier,
+          y:
+            transferringVelocity.y / 3 +
+            Math.sin(randomAngle) * randomSpeedMultiplier,
+        },
+        gravity: 0.02,
+        terminalVelocity: 110,
+      });
+    });
   };
 
   const draw = (deltaTime) => {
@@ -182,33 +180,44 @@ export const makeBall = (
         CTX.fill();
         CTX.restore();
 
-        sparks.forEach((spark) => {
-          spark.update(deltaTime);
+        if (sparks.length) {
+          // Embers are all one color and one width, so they go into a single
+          // stroked path rather than each one costing its own transform
+          CTX.save();
+          CTX.strokeStyle = sparkColor;
+          CTX.lineWidth = 1;
+          CTX.beginPath();
 
-          // A spark's radius stands in for its length
-          const length = transition(
-            spark.getRadius(),
-            0,
-            clampedProgress(0, popAnimationDuration, timeSincePopped),
-            easeOutCubic
-          );
+          sparks.forEach((spark) => {
+            spark.update(deltaTime);
 
-          if (length > 0 && spark.inViewport(length)) {
-            const { x, y } = spark.getPosition();
-            CTX.save();
-            CTX.fillStyle = sparkColor;
-            CTX.translate(x, y);
-            // Point each ember back at the burst it came from
-            CTX.rotate(
-              getHeadingInRadsFromTwoPoints(baseParticle.getPosition(), {
-                x,
-                y,
-              })
+            // A spark's radius stands in for its length
+            const length = transition(
+              spark.getRadius(),
+              0,
+              clampedProgress(0, popAnimationDuration, timeSincePopped),
+              easeOutCubic
             );
-            CTX.fillRect(0, 0, length, 1);
-            CTX.restore();
-          }
-        });
+
+            if (length > 0 && spark.inViewport(length)) {
+              const { x, y } = spark.getPosition();
+              // Each ember trails back towards the burst it came from
+              const heading = getHeadingInRadsFromTwoPoints(
+                baseParticle.getPosition(),
+                { x, y }
+              );
+
+              CTX.moveTo(x, y);
+              CTX.lineTo(
+                x + Math.cos(heading) * length,
+                y + Math.sin(heading) * length
+              );
+            }
+          });
+
+          CTX.stroke();
+          CTX.restore();
+        }
       }
     } else if (inPlay()) {
       baseParticle.update(deltaTime);
