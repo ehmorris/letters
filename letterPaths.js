@@ -72,6 +72,11 @@ const two =
 const zero =
   "m54.5 93.5c-17.0625 0-27.375-13.5469-27.375-35.4375 0-21.8437 10.4531-35.2031 27.375-35.2031s27.3281 13.3125 27.3281 35.1562c0 21.8438-10.3125 35.4844-27.3281 35.4844zm-13.7812-35.4375c0 3.5156.2812 6.7031.7968 9.5156l24.6094-23.8125c-2.2969-6.2812-6.3281-9.6094-11.625-9.6094-8.5312 0-13.7812 8.5313-13.7812 23.9063zm13.7812 24.1406c8.5312 0 13.7344-8.5781 13.7344-24.1406 0-3.4687-.2813-6.5625-.7969-9.3281l-24.6563 23.7656c2.2969 6.375 6.3282 9.7031 11.7188 9.7031z";
 
+// Drawn to match the letterforms: a tapered bar with rounded caps sitting on
+// the same baseline, above a dot the width of the bar's shoulders
+const exclamation =
+  "m47 31.5c0-4.1421 3.3579-7.5 7.5-7.5s7.5 3.3579 7.5 7.5l-2 34.5c0 3.0376-2.4624 5.5-5.5 5.5s-5.5-2.4624-5.5-5.5zm0 54c0-4.1421 3.3579-7.5 7.5-7.5s7.5 3.3579 7.5 7.5-3.3579 7.5-7.5 7.5-7.5-3.3579-7.5-7.5z";
+
 export const letterBoundingBoxHeight = 115;
 export const letterBoundingBoxWidth = 109;
 export const allPaths = {
@@ -111,6 +116,7 @@ export const allPaths = {
   7: seven,
   8: eight,
   9: nine,
+  "!": exclamation,
 };
 
 // The draw loop needs a Path2D on every frame, and parsing a path string of
@@ -121,3 +127,48 @@ export const allPathObjects = Object.fromEntries(
     new Path2D(path),
   ])
 );
+
+// Every glyph is drawn inside the same 109 unit box and sits centered in it,
+// but the ink itself ranges from 15 units wide for an exclamation point to 86
+// for a W. Spacing a word off the box instead of the ink leaves craters around
+// the narrow letters, so these are the measured ink widths of each glyph
+const inkWidths = {
+  A: 60, B: 53, C: 60, D: 58, E: 46, F: 45, G: 63, H: 59, I: 41,
+  J: 46, K: 55, L: 45, M: 72, N: 57, O: 65, P: 51, Q: 65, R: 52,
+  S: 54, T: 55, U: 57, V: 61, W: 86, X: 56, Y: 58, Z: 53,
+  0: 55, 1: 33, 2: 50, 3: 51, 4: 56, 5: 51, 6: 53, 7: 49, 8: 55, 9: 53,
+  "!": 15,
+};
+
+// Space between one letter's ink and the next
+const letterTracking = 18;
+
+const advanceFor = (character) =>
+  (inkWidths[character] || letterBoundingBoxWidth) + letterTracking;
+
+export const wordBoundingBoxWidth = (word) =>
+  word.split("").reduce((total, character) => total + advanceFor(character), 0);
+
+// Draws a word with its top left at the origin, in the same units a single
+// glyph uses. `fill` takes either a color or a function of the letter's index,
+// which is what lets the spelling progress line dim the letters not reached yet
+export const fillWord = (CTX, word, fill) => {
+  CTX.save();
+
+  word.split("").forEach((character, index) => {
+    const path = allPathObjects[character];
+    const advance = advanceFor(character);
+
+    if (path) {
+      CTX.save();
+      CTX.translate((advance - letterBoundingBoxWidth) / 2, 0);
+      CTX.fillStyle = typeof fill === "function" ? fill(index) : fill;
+      CTX.fill(path);
+      CTX.restore();
+    }
+
+    CTX.translate(advance, 0);
+  });
+
+  CTX.restore();
+};
