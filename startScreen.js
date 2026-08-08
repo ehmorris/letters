@@ -1,5 +1,6 @@
-// How long a session runs. A parent taps one of these and hands the phone over
-const durationsInMinutes = [3, 5, 8, 12];
+// How long a session runs. A parent taps one of these and hands the phone over.
+// 0 is no limit: no countdown, no fireworks, play until someone stops it
+const durationsInMinutes = [3, 5, 8, 12, 0];
 
 export const makeStartScreen = (element, onStart) => {
   const durationList = element.querySelector(".durations");
@@ -8,8 +9,11 @@ export const makeStartScreen = (element, onStart) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "duration";
-    button.textContent = minutes;
-    button.setAttribute("aria-label", `${minutes} minutes`);
+    button.textContent = minutes === 0 ? "∞" : minutes;
+    button.setAttribute(
+      "aria-label",
+      minutes === 0 ? "No limit" : `${minutes} minutes`
+    );
 
     button.addEventListener("click", (e) => {
       // The game listens for clicks on the document. Without this, the tap that

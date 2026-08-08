@@ -45,8 +45,6 @@ const CTX = canvasManager.getContext();
 const initTime = Date.now();
 const debounceTime = 400;
 
-// How long a finished word stays up before the game moves on by itself
-const wordCelebrationDuration = 2600;
 const wordEntranceDuration = 900;
 
 // A session ends with a fireworks show rather than a screen that just stops
@@ -158,10 +156,16 @@ const popBalls = (ballsToPop) => {
   syncNumberToBalls();
 };
 
+// A finished word waits for a tap like everything else, but it gets long
+// enough on screen to land its entrance before a stray one can move past it
+const minimumOnScreen = () =>
+  sequence.getStep() === wordComplete ? wordEntranceDuration : debounceTime;
+
 // Missing a ball shouldn't wipe the screen and start over. Once balls are out
 // there, the only way forward is to pop all of them
 const canAdvance = () =>
-  unpoppedBalls().length === 0 && Date.now() - lastStepChange > debounceTime;
+  unpoppedBalls().length === 0 &&
+  Date.now() - lastStepChange > minimumOnScreen();
 
 const advanceSequence = () => {
   if (!canAdvance()) return;
@@ -335,16 +339,6 @@ animate((deltaTime, timeElapsed) => {
   scaleSpring.update();
 
   if (gameState === playing && timer.update()) startCelebration();
-
-  // A finished word moves on by itself, so nothing is waiting on a kid who has
-  // wandered off
-  if (
-    gameState === playing &&
-    sequence.getStep() === wordComplete &&
-    Date.now() - wordCompleteStart > wordCelebrationDuration
-  ) {
-    advanceSequence();
-  }
 
   if (gameState === celebrating) {
     const celebrationElapsed = Date.now() - celebrationStart;
