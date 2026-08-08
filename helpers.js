@@ -39,6 +39,9 @@ export const randomBool = (probability = 0.5) => Math.random() >= probability;
 
 export const randomBetween = (min, max) => Math.random() * (max - min) + min;
 
+export const getHeadingInRadsFromTwoPoints = (a, b) =>
+  Math.atan2(a.y - b.y, a.x - b.x);
+
 export const findBallAtPoint = (balls, { x, y }) => {
   return balls.find((ball) => {
     if (!ball.isPopped()) {

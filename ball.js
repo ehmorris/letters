@@ -1,7 +1,15 @@
 import { GRAVITY } from "./constants.js";
 import { makeParticle } from "./particle.js";
-import { transition, randomBetween, clampedProgress } from "./helpers.js";
+import {
+  transition,
+  randomBetween,
+  clampedProgress,
+  getHeadingInRadsFromTwoPoints,
+} from "./helpers.js";
 import { easeOutCubic } from "./easings.js";
+
+// The ember color a firework's sparks burn at
+const sparkColor = "oklch(74.2% 0.2146 50.82)";
 
 export const makeBall = (
   canvasManager,
@@ -14,13 +22,21 @@ export const makeBall = (
     delay = 0,
     terminalVelocity = Infinity,
     bounce = true,
+    // A tapped ball throws its pieces upward and lets gravity bring them back
+    // down, which is a gentle pop. A firework has to go off in every direction
+    radialPop = false,
   }
 ) => {
   const CTX = canvasManager.getContext();
   const popAnimationDurationMax = 2400;
+  const popAnimationDuration = randomBetween(
+    popAnimationDurationMax - 800,
+    popAnimationDurationMax
+  );
   let popped = false;
   let poppedTime = false;
   let poppedPieces = [];
+  let sparks = [];
   let gone = false;
 
   const baseParticle = makeParticle(canvasManager, {
@@ -47,13 +63,15 @@ export const makeBall = (
       ? popperVelocity
       : baseParticle.getVelocity();
 
-    // A big ball should shatter into more pieces than a small one
-    const numberOfPopPieces = Math.round(
-      transition(18, 60, clampedProgress(30, 120, radius))
-    );
+    // A big ball should shatter into more pieces than a small one. A firework
+    // is small but still needs enough pieces to read as a burst
+    const numberOfPopPieces = radialPop
+      ? Math.round(randomBetween(20, 60))
+      : Math.round(transition(18, 60, clampedProgress(30, 120, radius)));
 
     poppedPieces = new Array(numberOfPopPieces).fill().map(() => {
       const randomAngle = Math.random() * Math.PI * 2;
+      const randomSpeed = randomBetween(3, 10);
 
       return {
         // Each piece fades out on its own schedule so they don't all wink out
@@ -63,23 +81,64 @@ export const makeBall = (
           popAnimationDurationMax
         ),
         particle: makeParticle(canvasManager, {
-          radius: randomBetween(radius / 30, radius / 11),
+          radius: radialPop
+            ? randomBetween(radius / 5, radius / 2)
+            : randomBetween(radius / 30, radius / 11),
           startPosition: {
             x: baseParticle.getPosition().x + Math.cos(randomAngle) * radius,
             y: baseParticle.getPosition().y + Math.sin(randomAngle) * radius,
           },
-          startVelocity: {
-            x: randomBetween(
-              transferringVelocity.x - 3,
-              transferringVelocity.x + 3
-            ),
-            y: randomBetween(transferringVelocity.y - 8, 0),
-          },
+          // Pieces keep some of the velocity of whatever they came from, but
+          // mostly head straight out from the center at the given angle
+          startVelocity: radialPop
+            ? {
+                x:
+                  transferringVelocity.x / 3 +
+                  Math.cos(randomAngle) * randomSpeed,
+                y:
+                  transferringVelocity.y / 3 +
+                  Math.sin(randomAngle) * randomSpeed,
+              }
+            : {
+                x: randomBetween(
+                  transferringVelocity.x - 3,
+                  transferringVelocity.x + 3
+                ),
+                y: randomBetween(transferringVelocity.y - 8, 0),
+              },
           gravity,
-          bounce: true,
+          bounce,
         }),
       };
     });
+
+    // Sparks are the part that actually reads as a firework: long thin embers
+    // thrown clear of the burst and falling slowly
+    sparks = radialPop
+      ? new Array(16).fill().map(() => {
+          const randomAngle = Math.random() * Math.PI * 2;
+          const randomLength = randomBetween(20, 50);
+          const randomSpeedMultiplier = randomBetween(8, 16);
+
+          return makeParticle(canvasManager, {
+            radius: randomLength,
+            startPosition: {
+              x: baseParticle.getPosition().x + Math.cos(randomAngle) * radius,
+              y: baseParticle.getPosition().y + Math.sin(randomAngle) * radius,
+            },
+            startVelocity: {
+              x:
+                transferringVelocity.x / 3 +
+                Math.cos(randomAngle) * randomSpeedMultiplier,
+              y:
+                transferringVelocity.y / 3 +
+                Math.sin(randomAngle) * randomSpeedMultiplier,
+            },
+            gravity: 0.02,
+            terminalVelocity: 110,
+          });
+        })
+      : [];
   };
 
   const draw = (deltaTime) => {
@@ -89,6 +148,7 @@ export const makeBall = (
       if (timeSincePopped > popAnimationDurationMax) {
         gone = true;
         poppedPieces = [];
+        sparks = [];
       } else {
         // Every piece of a ball is the same color, so they can all go into one
         // path and be rasterized in a single fill instead of sixty
@@ -121,6 +181,34 @@ export const makeBall = (
 
         CTX.fill();
         CTX.restore();
+
+        sparks.forEach((spark) => {
+          spark.update(deltaTime);
+
+          // A spark's radius stands in for its length
+          const length = transition(
+            spark.getRadius(),
+            0,
+            clampedProgress(0, popAnimationDuration, timeSincePopped),
+            easeOutCubic
+          );
+
+          if (length > 0 && spark.inViewport(length)) {
+            const { x, y } = spark.getPosition();
+            CTX.save();
+            CTX.fillStyle = sparkColor;
+            CTX.translate(x, y);
+            // Point each ember back at the burst it came from
+            CTX.rotate(
+              getHeadingInRadsFromTwoPoints(baseParticle.getPosition(), {
+                x,
+                y,
+              })
+            );
+            CTX.fillRect(0, 0, length, 1);
+            CTX.restore();
+          }
+        });
       }
     } else if (inPlay()) {
       baseParticle.update(deltaTime);
