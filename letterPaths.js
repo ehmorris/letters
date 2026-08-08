@@ -162,13 +162,31 @@ export const advanceFor = (character, { tabularDigits = false } = {}) =>
 
 // Ink width spacing assumes both letters have a flat edge facing each other.
 // Where they slope apart instead — the V and A of VAN, the A and T of HAT —
-// it leaves a hole. These are measured per pair: the gap between the two
-// glyphs is sampled down every scanline, then closed up until the pair reads
-// like a pair of straight stems does, stopping before the ink can collide
+// it leaves a hole.
+//
+// Measured rather than guessed. For each pair the gap between the two glyphs
+// is sampled on every scanline where both have ink, and those gaps are
+// collapsed with a harmonic mean, which weights the closest approach far more
+// than the open rows — near enough to how the eye reads spacing. The kern is
+// the shift that makes that number match what a pair of flat stems like HN
+// already reads as, stopping before the ink can collide.
+//
+// Every pair the word list can produce is in here, including the ones that
+// barely move. Kerning some pairs of a word and not others is worse than
+// kerning none of them: it was what made TIGER read as TI-GER. Adding words
+// with pairs that aren't listed here means measuring those pairs too.
 const kerningPairs = {
-  AL: -5, AT: -22, BI: -5, CA: -6, CK: -5, CO: -5, ES: -6, IG: -10,
-  IL: -5, IS: -7, OS: -5, OW: -8, OX: -8, PI: -7, RY: -6, ST: -8,
-  TA: -22, VA: -15, "G!": -5,
+  "A!": -4, AI: -5, AK: -5, AL: -5, AN: -3, AP: -4, AR: -4, AT: -21,
+  BA: -4, BI: -6, BO: -2, CA: -8, CK: -4, CO: -6, CU: -3, DO: -1,
+  "E!": -2, EA: -4, EB: -4, ED: -3, EE: -3, EG: -6, EN: -2, ER: -3,
+  ES: -8, FI: -3, FO: -6, FR: -4, "G!": -3, GE: -2, GG: -4, "H!": 2,
+  HA: -3, IG: -10, IL: -5, IN: -3, IR: -4, IS: -8, "K!": -2, KE: -3,
+  "L!": -4, LE: -5, LK: -5, LL: -6, MI: -3, MP: 2, "N!": 2, OC: -1,
+  OE: -1, OG: -2, OK: -2, OO: -2, OR: -1, OS: -5, OW: -7, OX: -8,
+  "P!": -2, PI: -9, PL: -3, PP: -3, QU: -1, "R!": 1, RA: -4, RO: -2,
+  RS: -2, RY: -7, "S!": -3, SE: -2, SH: -1, SO: -4, ST: -10, SU: -2,
+  "T!": -5, TA: -21, TI: -5, TR: -6, UE: 1, UM: 2, UN: 2, UP: 1,
+  US: -3, VA: -16, "W!": -3, "X!": -2, "Y!": -5, ZE: -5,
 };
 
 // The step from one glyph's origin to the next. A tabular readout wants its
