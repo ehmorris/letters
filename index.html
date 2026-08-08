@@ -53,7 +53,15 @@
     <link rel="stylesheet" type="text/css" href="./index.css" />
   </head>
   <body>
-    <div class="layout"><div id="canvas"></div></div>
+    <div class="layout">
+      <div id="canvas"></div>
+      <div class="timer" id="timer" hidden></div>
+      <div class="start-screen" id="start-screen">
+        <h1 class="start-title">Letters!</h1>
+        <p class="start-hint">How long?</p>
+        <div class="durations"></div>
+      </div>
+    </div>
     <script type="module" src="./index.js"></script>
     <script
       data-goatcounter="https://ehmorris.goatcounter.com/count"

@@ -1,127 +1,242 @@
-import { GRAVITY, INTERVAL } from "./constants.js";
-import { progress, transition, randomBetween } from "./helpers.js";
+import { GRAVITY } from "./constants.js";
+import { makeParticle } from "./particle.js";
+import {
+  transition,
+  randomBetween,
+  clampedProgress,
+  getHeadingInRadsFromTwoPoints,
+} from "./helpers.js";
 import { easeOutCubic } from "./easings.js";
 
+// The ember color a firework's sparks burn at
+const sparkColor = "oklch(74.2% 0.2146 50.82)";
+
 export const makeBall = (
-  CTX,
-  canvasWidth,
-  canvasHeight,
-  { startPosition, startVelocity, radius, fill }
+  canvasManager,
+  {
+    startPosition,
+    startVelocity,
+    radius,
+    fill,
+    gravity = GRAVITY,
+    delay = 0,
+    terminalVelocity = Infinity,
+    bounce = true,
+    // A tapped ball throws its pieces upward and lets gravity bring them back
+    // down, which is a gentle pop. A firework has to go off in every direction
+    radialPop = false,
+  }
 ) => {
-  let position = { ...startPosition };
-  let velocity = { ...startVelocity };
+  const CTX = canvasManager.getContext();
   const popAnimationDurationMax = 2400;
   const popAnimationDuration = randomBetween(
     popAnimationDurationMax - 800,
     popAnimationDurationMax
   );
-  const numberOfPopPieces = 60;
   let popped = false;
   let poppedTime = false;
   let poppedPieces = [];
+  let sparks = [];
   let gone = false;
 
-  const update = (deltaTime) => {
-    if (!gone) {
-      const deltaTimeMultiplier = deltaTime / INTERVAL;
-      position.x += deltaTimeMultiplier * velocity.x;
-      position.y += deltaTimeMultiplier * velocity.y;
-      velocity.y += deltaTimeMultiplier * GRAVITY;
+  const baseParticle = makeParticle(canvasManager, {
+    radius,
+    startPosition,
+    startVelocity,
+    gravity,
+    terminalVelocity,
+    bounce,
+  });
 
-      if (position.x > canvasWidth - radius) {
-        position.x = canvasWidth - radius;
-        velocity.x *= -0.7;
-      } else if (position.x < radius) {
-        position.x = radius;
-        velocity.x *= -0.7;
-      }
+  const inPlay = () =>
+    !popped && !gone && baseParticle.getDuration() >= delay;
 
-      if (position.y > canvasHeight - radius) {
-        position.y = canvasHeight - radius;
-        velocity.y *= -0.7;
-      } else if (position.y < radius) {
-        position.y = radius + 1;
-        velocity.y *= -0.7;
-      }
-    }
-  };
-
-  const pop = () => {
+  const pop = (popperVelocity = false) => {
     // Two fingers can land on the same ball in one touchstart. Without this
     // the pop animation restarts and the ball counts as popped twice
     if (popped) return;
 
     popped = true;
     poppedTime = Date.now();
+
+    const transferringVelocity = popperVelocity
+      ? popperVelocity
+      : baseParticle.getVelocity();
+
+    // A big ball should shatter into more pieces than a small one. A firework
+    // is small but still needs enough pieces to read as a burst
+    const numberOfPopPieces = radialPop
+      ? Math.round(randomBetween(20, 60))
+      : Math.round(transition(18, 60, clampedProgress(30, 120, radius)));
+
     poppedPieces = new Array(numberOfPopPieces).fill().map(() => {
       const randomAngle = Math.random() * Math.PI * 2;
-      return makeBall(CTX, canvasWidth, canvasHeight, {
-        startPosition: {
-          x: position.x + Math.cos(randomAngle) * radius,
-          y: position.y + Math.sin(randomAngle) * radius,
-        },
-        startVelocity: {
-          x: randomBetween(velocity.x - 3, velocity.x + 3),
-          y: randomBetween(velocity.y - 8, 0),
-        },
-        radius: randomBetween(1, 4),
-        fill,
-      });
+      const randomSpeed = randomBetween(3, 10);
+
+      return {
+        // Each piece fades out on its own schedule so they don't all wink out
+        // of existence on the same frame
+        shrinkDuration: randomBetween(
+          popAnimationDurationMax - 800,
+          popAnimationDurationMax
+        ),
+        particle: makeParticle(canvasManager, {
+          radius: radialPop
+            ? randomBetween(radius / 5, radius / 2)
+            : randomBetween(radius / 30, radius / 11),
+          startPosition: {
+            x: baseParticle.getPosition().x + Math.cos(randomAngle) * radius,
+            y: baseParticle.getPosition().y + Math.sin(randomAngle) * radius,
+          },
+          // Pieces keep some of the velocity of whatever they came from, but
+          // mostly head straight out from the center at the given angle
+          startVelocity: radialPop
+            ? {
+                x:
+                  transferringVelocity.x / 3 +
+                  Math.cos(randomAngle) * randomSpeed,
+                y:
+                  transferringVelocity.y / 3 +
+                  Math.sin(randomAngle) * randomSpeed,
+              }
+            : {
+                x: randomBetween(
+                  transferringVelocity.x - 3,
+                  transferringVelocity.x + 3
+                ),
+                y: randomBetween(transferringVelocity.y - 8, 0),
+              },
+          gravity,
+          bounce,
+        }),
+      };
     });
+
+    // Sparks are the part that actually reads as a firework: long thin embers
+    // thrown clear of the burst and falling slowly
+    sparks = radialPop
+      ? new Array(16).fill().map(() => {
+          const randomAngle = Math.random() * Math.PI * 2;
+          const randomLength = randomBetween(20, 50);
+          const randomSpeedMultiplier = randomBetween(8, 16);
+
+          return makeParticle(canvasManager, {
+            radius: randomLength,
+            startPosition: {
+              x: baseParticle.getPosition().x + Math.cos(randomAngle) * radius,
+              y: baseParticle.getPosition().y + Math.sin(randomAngle) * radius,
+            },
+            startVelocity: {
+              x:
+                transferringVelocity.x / 3 +
+                Math.cos(randomAngle) * randomSpeedMultiplier,
+              y:
+                transferringVelocity.y / 3 +
+                Math.sin(randomAngle) * randomSpeedMultiplier,
+            },
+            gravity: 0.02,
+            terminalVelocity: 110,
+          });
+        })
+      : [];
   };
 
-  const draw = (deltaTime, scale = 1) => {
+  const draw = (deltaTime) => {
     if (popped) {
       const timeSincePopped = Date.now() - poppedTime;
+
       if (timeSincePopped > popAnimationDurationMax) {
         gone = true;
+        poppedPieces = [];
+        sparks = [];
       } else {
-        poppedPieces.forEach((p) => {
-          const scaleProgress = progress(
+        // Every piece of a ball is the same color, so they can all go into one
+        // path and be rasterized in a single fill instead of sixty
+        CTX.save();
+        CTX.fillStyle = fill;
+        CTX.beginPath();
+
+        poppedPieces.forEach(({ particle, shrinkDuration }) => {
+          particle.update(deltaTime);
+
+          // Shrinking via the radius rather than a transform is what lets the
+          // pieces share a path. clampedProgress matters here: an eased value
+          // past 1 would produce a negative radius, which arc() throws on
+          const scaledRadius =
+            particle.getRadius() *
+            transition(
+              1,
+              0,
+              clampedProgress(0, shrinkDuration, timeSincePopped),
+              easeOutCubic
+            );
+
+          if (scaledRadius > 0 && particle.inViewport(scaledRadius)) {
+            const { x, y } = particle.getPosition();
+            // Without a moveTo, each arc is joined to the previous one by a line
+            CTX.moveTo(x + scaledRadius, y);
+            CTX.arc(x, y, scaledRadius, 0, 2 * Math.PI);
+          }
+        });
+
+        CTX.fill();
+        CTX.restore();
+
+        sparks.forEach((spark) => {
+          spark.update(deltaTime);
+
+          // A spark's radius stands in for its length
+          const length = transition(
+            spark.getRadius(),
             0,
-            p.getPopAnimationDuration(),
-            timeSincePopped
+            clampedProgress(0, popAnimationDuration, timeSincePopped),
+            easeOutCubic
           );
-          p.update(deltaTime);
-          p.draw(deltaTime, transition(1, 0, scaleProgress, easeOutCubic));
+
+          if (length > 0 && spark.inViewport(length)) {
+            const { x, y } = spark.getPosition();
+            CTX.save();
+            CTX.fillStyle = sparkColor;
+            CTX.translate(x, y);
+            // Point each ember back at the burst it came from
+            CTX.rotate(
+              getHeadingInRadsFromTwoPoints(baseParticle.getPosition(), {
+                x,
+                y,
+              })
+            );
+            CTX.fillRect(0, 0, length, 1);
+            CTX.restore();
+          }
         });
       }
-    } else if (!gone) {
-      CTX.save();
-      CTX.fillStyle = fill;
-      CTX.translate(position.x, position.y);
-      CTX.scale(scale, scale);
-      CTX.beginPath();
-      CTX.arc(0, 0, radius, 0, 2 * Math.PI);
-      CTX.closePath();
-      CTX.fill();
-      CTX.restore();
+    } else if (inPlay()) {
+      baseParticle.update(deltaTime);
+
+      if (baseParticle.inViewport()) {
+        const { x, y } = baseParticle.getPosition();
+        CTX.save();
+        CTX.fillStyle = fill;
+        CTX.beginPath();
+        CTX.arc(x, y, radius, 0, 2 * Math.PI);
+        CTX.fill();
+        CTX.restore();
+      }
     }
   };
 
-  // Balls bounce off the canvas size they were made with, so shrinking the
-  // window can strand one out of reach past the new edge
-  const setCanvasSize = (width, height) => {
-    canvasWidth = width;
-    canvasHeight = height;
-    position.x = Math.min(Math.max(radius, position.x), canvasWidth - radius);
-    position.y = Math.min(Math.max(radius, position.y), canvasHeight - radius);
-    poppedPieces.forEach((p) => p.setCanvasSize(width, height));
-  };
-
   return {
-    update,
     draw,
     pop,
-    setCanvasSize,
-    getPosition: () => position,
-    getVelocity: () => velocity,
-    isPopped: () => popped,
-    getPopAnimationDuration: () => popAnimationDuration,
-    getRadius: () => radius,
+    inPlay,
+    getPosition: baseParticle.getPosition,
+    getVelocity: baseParticle.getVelocity,
+    getRadius: baseParticle.getRadius,
+    setPosition: baseParticle.setPosition,
+    setVelocity: baseParticle.setVelocity,
     getFill: () => fill,
-    setPosition: (passedPosition) => (position = passedPosition),
-    setVelocity: (passedVelocity) => (velocity = passedVelocity),
+    isPopped: () => popped,
+    isGone: () => gone,
   };
 };
 

@@ -3,9 +3,16 @@ export const animate = (drawFunc) => {
   let previousTimestamp = false;
 
   const drawFuncContainer = (timestamp) => {
-    const deltaTime = previousTimestamp
-      ? timestamp - previousTimestamp
-      : performance.now() - timestamp;
+    // Prevent deltaTime from producing huge values when e.g. user switches
+    // tabs and then switches back. 20 represents the number of milliseconds
+    // between frames when game is running at 50fps. Without the ceiling a
+    // single long frame teleports every ball straight through its bounds check
+    const deltaTime = Math.min(
+      20,
+      previousTimestamp
+        ? timestamp - previousTimestamp
+        : performance.now() - timestamp
+    );
     const timeElapsed = timestamp - initTimestamp;
     drawFunc(deltaTime, timeElapsed);
     window.requestAnimationFrame(drawFuncContainer);
@@ -31,6 +38,9 @@ export const degToRag = (degree) => (degree * Math.PI) / 180;
 export const randomBool = (probability = 0.5) => Math.random() >= probability;
 
 export const randomBetween = (min, max) => Math.random() * (max - min) + min;
+
+export const getHeadingInRadsFromTwoPoints = (a, b) =>
+  Math.atan2(a.y - b.y, a.x - b.x);
 
 export const findBallAtPoint = (balls, { x, y }) => {
   return balls.find((ball) => {
