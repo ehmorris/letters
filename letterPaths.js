@@ -155,10 +155,17 @@ const letterTracking = 9;
 const widestDigitInkWidth = 56;
 const isDigit = (character) => character >= "0" && character <= "9";
 
-export const advanceFor = (character, { tabularDigits = false } = {}) =>
+// extraTracking opens a word up beyond the display setting. Letters set small
+// need more air between them than the same letters set large do
+export const advanceFor = (
+  character,
+  { tabularDigits = false, extraTracking = 0 } = {}
+) =>
   (tabularDigits && isDigit(character)
     ? widestDigitInkWidth
-    : inkWidths[character] || letterBoundingBoxWidth) + letterTracking;
+    : inkWidths[character] || letterBoundingBoxWidth) +
+  letterTracking +
+  extraTracking;
 
 // Ink width spacing assumes both letters have a flat edge facing each other.
 // Where they slope apart instead — the V and A of VAN, the A and T of HAT —
@@ -181,25 +188,27 @@ const kerningPairs = {
   "E!": -2, EA: -4, EB: -4, ED: -3, EE: -3, EG: -6, EN: -2, ER: -3,
   ES: -8, FI: -3, FO: -6, FR: -4, "G!": -3, GE: -2, GG: -4, "H!": 2,
   HA: -3, IG: -10, IL: -5, IN: -3, IR: -4, IS: -8, "K!": -2, KE: -3,
-  "L!": -4, LE: -5, LK: -5, LL: -6, MI: -3, MP: 2, "N!": 2, OC: -1,
-  OE: -1, OG: -2, OK: -2, OO: -2, OR: -1, OS: -5, OW: -7, OX: -8,
-  "P!": -2, PI: -9, PL: -3, PP: -3, QU: -1, "R!": 1, RA: -4, RO: -2,
-  RS: -2, RY: -7, "S!": -3, SE: -2, SH: -1, SO: -4, ST: -10, SU: -2,
-  "T!": -5, TA: -21, TI: -5, TR: -6, UE: 1, UM: 2, UN: 2, UP: 1,
-  US: -3, VA: -16, "W!": -3, "X!": -2, "Y!": -5, ZE: -5,
+  "L!": -4, LE: -5, LK: -5, LL: -6, MI: -3, MP: 2, "N!": 2, NE: 3,
+  OC: -1, OE: -1, OG: -2, OK: -2, OO: -2, OR: -1, OS: -5, OW: -7,
+  OX: -8, "P!": -2, PI: -9, PL: -3, PP: -3, QU: -1, "R!": 1, RA: -4,
+  RO: -2, RS: -2, RY: -7, "S!": -3, SE: -2, SH: -1, SO: -4, ST: -10,
+  SU: -2, "T!": -5, TA: -21, TI: -5, TR: -6, UE: 1, UM: 2, UN: 2,
+  UP: 1, US: -3, VA: -16, "W!": -3, "X!": -2, "Y!": -5, ZE: -5,
 };
 
 // The step from one glyph's origin to the next. A tabular readout wants its
 // columns to line up more than it wants good fit, so it skips the kerning
-export const advanceAt = (word, index, { tabularDigits = false } = {}) => {
+export const advanceAt = (word, index, options = {}) => {
   const character = word[index];
   const next = word[index + 1];
+  // Kerning is an optical correction between two shapes, so it holds however
+  // loosely the word is tracked
   const kern =
-    tabularDigits || next === undefined
+    options.tabularDigits || next === undefined
       ? 0
       : kerningPairs[character + next] || 0;
 
-  return advanceFor(character, { tabularDigits }) + kern;
+  return advanceFor(character, options) + kern;
 };
 
 export const wordBoundingBoxWidth = (word, options) =>
@@ -210,7 +219,7 @@ export const wordBoundingBoxWidth = (word, options) =>
 // Draws a word with its top left at the origin, in the same units a single
 // glyph uses. `fill` takes either a color or a function of the letter's index,
 // which is what lets the spelling progress line dim the letters not reached yet
-export const fillWord = (CTX, word, fill) => {
+export const fillWord = (CTX, word, fill, options = {}) => {
   CTX.save();
 
   word.split("").forEach((character, index) => {
@@ -219,13 +228,16 @@ export const fillWord = (CTX, word, fill) => {
     if (path) {
       CTX.save();
       // Centered in its own slot, before any kerning moves the next one in
-      CTX.translate((advanceFor(character) - letterBoundingBoxWidth) / 2, 0);
+      CTX.translate(
+        (advanceFor(character, options) - letterBoundingBoxWidth) / 2,
+        0
+      );
       CTX.fillStyle = typeof fill === "function" ? fill(index) : fill;
       CTX.fill(path);
       CTX.restore();
     }
 
-    CTX.translate(advanceAt(word, index), 0);
+    CTX.translate(advanceAt(word, index, options), 0);
   });
 
   CTX.restore();

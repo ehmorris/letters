@@ -26,7 +26,7 @@ import {
   wordComplete,
   numberInterlude,
 } from "./sequence.js";
-import { letterColors, numberColors, ballColors, yellow } from "./colors.js";
+import { letterColors, numberColors, ballColors } from "./colors.js";
 import {
   allPathObjects,
   fillWord,
@@ -47,14 +47,23 @@ const debounceTime = 400;
 
 const wordEntranceDuration = 900;
 
+// The word along the bottom is a fraction of the size of the one that fills
+// the screen, and tracking that reads as tight and deliberate at display size
+// reads as clumped at this one
+const progressTracking = { extraTracking: 16 };
+
 // A session ends with a fireworks show rather than a screen that just stops.
 // Eight at a time is what bubbles launches, and since each one carries its own
 // delay of up to 1.2s a batch steps itself out rather than going up as a wall
 const fireworksPerBatch = 8;
-const celebrationDuration = 9000;
+const fireworkRounds = 3;
 // Long enough that a batch has mostly finished before the next one goes up.
 // Stacking them closer just puts more on screen at once than anyone can watch
 const fireworkLaunchInterval = 2600;
+
+// Stacked lines are set closer together than a full glyph box, since the ink
+// only fills the middle of it
+const lineAdvance = 96;
 
 const audioManager = makeAudioManager();
 const sequence = makeSequence();
@@ -64,12 +73,12 @@ const playing = "playing";
 const celebrating = "celebrating";
 let gameState = start;
 
-let displayText = "";
+let displayLines = [];
 let textColor = letterColors[0];
 let balls = [];
 let fireworks = [];
-let celebrationStart = 0;
-let wordCompleteStart = 0;
+let entranceStart = 0;
+let fireworkRoundsLaunched = 0;
 let lastStepChange = Date.now();
 let lastFireworkLaunch = 0;
 
@@ -82,6 +91,18 @@ const scaleSpring = makeSpring(1, {
 
 const randomFrom = (options) =>
   options[Math.floor(Math.random() * options.length)];
+
+// Letters and numbers come and go too fast for a repeat to register, but a
+// celebration is a moment — two in a row in the same color reads as a bug
+let lastCelebrationColor = null;
+
+const nextCelebrationColor = () => {
+  lastCelebrationColor = randomFrom(
+    ballColors.filter((color) => color !== lastCelebrationColor)
+  );
+
+  return lastCelebrationColor;
+};
 
 const spawnBalls = (number) => {
   const widthRequiredForEachBall = canvasManager.getWidth() / number;
@@ -121,18 +142,20 @@ const showCurrentStep = () => {
   const step = sequence.getStep();
 
   if (step === spelling) {
-    displayText = sequence.getLetter();
+    displayLines = [sequence.getLetter()];
     textColor = randomFrom(letterColors);
     balls = [];
   } else if (step === wordComplete) {
-    displayText = `${sequence.getWord()}!`;
-    textColor = yellow;
+    displayLines = [`${sequence.getWord()}!`];
+    // A finished word takes a turn through the whole palette the same way a
+    // single letter does, rather than always arriving in yellow
+    textColor = nextCelebrationColor();
     balls = [];
-    wordCompleteStart = Date.now();
+    entranceStart = Date.now();
     addFireworks(fireworksPerBatch);
   } else {
     const number = sequence.getInterludeNumber();
-    displayText = String(number);
+    displayLines = [String(number)];
     textColor = randomFrom(numberColors);
     balls = spawnBalls(number);
   }
@@ -145,7 +168,7 @@ const unpoppedBalls = () => balls.filter((ball) => !ball.isPopped());
 // The number on screen is whatever is left to pop, rather than its own
 // countdown that can drift out of sync with the balls
 const syncNumberToBalls = () => {
-  displayText = unpoppedBalls().length.toString();
+  displayLines = [unpoppedBalls().length.toString()];
   lastStepChange = Date.now();
 };
 
@@ -191,26 +214,30 @@ const addFireworks = (count) => {
 };
 
 // Time being up should feel like the end of something good, not like the game
-// froze mid-letter
+// froze mid-letter. The screen stays here afterwards: nobody needs to be asked
+// a question at the end of a session, and taps still set off more fireworks
 const startCelebration = () => {
   gameState = celebrating;
-  celebrationStart = Date.now();
-  displayText = "";
+  displayLines = ["ALL", "DONE"];
+  textColor = nextCelebrationColor();
+  entranceStart = Date.now();
   balls = [];
   fireworks = [];
-  addFireworks(fireworksPerBatch);
+  fireworkRoundsLaunched = 0;
+  timer.stop();
+  launchFireworkRound();
 };
 
-const endSession = () => {
-  gameState = start;
-  fireworks = [];
-  timer.stop();
-  startScreen.show();
+const launchFireworkRound = () => {
+  fireworkRoundsLaunched++;
+  addFireworks(fireworksPerBatch);
 };
 
 const timer = makeTimer(document.querySelector("#timer"));
 
-const startScreen = makeStartScreen(
+// Shown once on load and never again — a session ends on ALL DONE, not back
+// at a question
+makeStartScreen(
   document.querySelector("#start-screen"),
   (durationMs) => {
     // The tap that starts a session is also the user gesture an AudioContext
@@ -319,7 +346,7 @@ const drawSpellingProgress = () => {
   const letterIndex = sequence.getLetterIndex();
   const glyphHeight = Math.min(30, canvasManager.getHeight() / 22);
   const scaleFactor = glyphHeight / letterBoundingBoxHeight;
-  const width = wordBoundingBoxWidth(word) * scaleFactor;
+  const width = wordBoundingBoxWidth(word, progressTracking) * scaleFactor;
 
   canvasManager.drawBlock((CTX) => {
     CTX.translate(
@@ -328,8 +355,14 @@ const drawSpellingProgress = () => {
     );
     CTX.scale(scaleFactor, scaleFactor);
 
-    fillWord(CTX, word, (index) =>
-      index < letterIndex ? "rgba(252, 246, 232, .7)" : "rgba(252, 246, 232, .2)"
+    fillWord(
+      CTX,
+      word,
+      (index) =>
+        index < letterIndex
+          ? "rgba(252, 246, 232, .7)"
+          : "rgba(252, 246, 232, .2)",
+      progressTracking
     );
   });
 };
@@ -340,19 +373,12 @@ animate((deltaTime) => {
 
   if (gameState === playing && timer.update()) startCelebration();
 
-  if (gameState === celebrating) {
-    const celebrationElapsed = Date.now() - celebrationStart;
-
-    // Keep launching so there's no dead air, but stop early enough that the
-    // last burst has time to finish before the screen clears
-    if (
-      celebrationElapsed < celebrationDuration - 3500 &&
-      Date.now() - lastFireworkLaunch > fireworkLaunchInterval
-    ) {
-      addFireworks(fireworksPerBatch);
-    }
-
-    if (celebrationElapsed > celebrationDuration) endSession();
+  if (
+    gameState === celebrating &&
+    fireworkRoundsLaunched < fireworkRounds &&
+    Date.now() - lastFireworkLaunch > fireworkLaunchInterval
+  ) {
+    launchFireworkRound();
   }
 
   const gentleContinuousSizeTransition = transition(
@@ -392,8 +418,17 @@ animate((deltaTime) => {
   // still handed to draw until it's out of the array
   balls = balls.filter((ball) => !ball.isGone());
 
-  if (displayText) {
-    const isWord = displayText.length > 1;
+  if (displayLines.length) {
+    // A lone letter or digit fills the screen edge to edge. Anything longer is
+    // a word, which gets a margin and an entrance
+    const isSingleGlyph =
+      displayLines.length === 1 && displayLines[0].length === 1;
+    const lineWidths = displayLines.map(wordBoundingBoxWidth);
+    const contentWidth = isSingleGlyph
+      ? letterBoundingBoxWidth
+      : Math.max(...lineWidths);
+    const contentHeight =
+      (displayLines.length - 1) * lineAdvance + letterBoundingBoxHeight;
 
     canvasManager.drawBlock((CTX) => {
       // Centered rotation and scale operations
@@ -405,33 +440,38 @@ animate((deltaTime) => {
       CTX.scale(scaleSpring.getCurrentValue(), scaleSpring.getCurrentValue());
       CTX.rotate(continuousRotationTransition);
 
-      if (isWord) {
-        // A finished word arrives with a bounce
+      if (!isSingleGlyph) {
         const entrance = transition(
           0.4,
           1,
-          clampedProgress(0, wordEntranceDuration, Date.now() - wordCompleteStart),
+          clampedProgress(0, wordEntranceDuration, Date.now() - entranceStart),
           easeOutElastic
         );
         CTX.scale(entrance, entrance);
       }
 
       // Word placement, scaling, and rendering
-      const contentWidth = isWord
-        ? wordBoundingBoxWidth(displayText)
-        : letterBoundingBoxWidth;
       const scaleFactor = Math.min(
-        canvasManager.getHeight() / letterBoundingBoxHeight,
-        (canvasManager.getWidth() * (isWord ? 0.9 : 1)) / contentWidth
+        (canvasManager.getHeight() * (isSingleGlyph ? 1 : 0.9)) / contentHeight,
+        (canvasManager.getWidth() * (isSingleGlyph ? 1 : 0.9)) / contentWidth
       );
       CTX.scale(scaleFactor, scaleFactor);
-      CTX.translate(-contentWidth / 2, -letterBoundingBoxHeight / 2);
+      CTX.translate(-contentWidth / 2, -contentHeight / 2);
 
-      if (isWord) {
-        fillWord(CTX, displayText, textColor);
-      } else {
+      if (isSingleGlyph) {
         CTX.fillStyle = textColor;
-        CTX.fill(allPathObjects[displayText]);
+        CTX.fill(allPathObjects[displayLines[0]]);
+      } else {
+        displayLines.forEach((line, index) => {
+          CTX.save();
+          // Each line centered against the widest one
+          CTX.translate(
+            (contentWidth - lineWidths[index]) / 2,
+            index * lineAdvance
+          );
+          fillWord(CTX, line, textColor);
+          CTX.restore();
+        });
       }
     });
   }

@@ -28,10 +28,4 @@ export const makeStartScreen = (element, onStart) => {
 
     durationList.appendChild(button);
   });
-
-  return {
-    show: () => (element.hidden = false),
-    hide: () => (element.hidden = true),
-    isShowing: () => !element.hidden,
-  };
 };
