@@ -216,29 +216,74 @@ export const wordBoundingBoxWidth = (word, options) =>
     .split("")
     .reduce((total, _, index) => total + advanceAt(word, index, options), 0);
 
-// Draws a word with its top left at the origin, in the same units a single
-// glyph uses. `fill` takes either a color or a function of the letter's index,
-// which is what lets the spelling progress line dim the letters not reached yet
-export const fillWord = (CTX, word, fill, options = {}) => {
+// Walks a word, calling back with the origin at the top left of each letter's
+// own box, so everything drawn under a letter lands where the letter did
+const eachGlyph = (CTX, word, options, drawGlyph) => {
   CTX.save();
 
   word.split("").forEach((character, index) => {
-    const path = allPathObjects[character];
-
-    if (path) {
-      CTX.save();
-      // Centered in its own slot, before any kerning moves the next one in
-      CTX.translate(
-        (advanceFor(character, options) - letterBoundingBoxWidth) / 2,
-        0
-      );
-      CTX.fillStyle = typeof fill === "function" ? fill(index) : fill;
-      CTX.fill(path);
-      CTX.restore();
-    }
+    CTX.save();
+    // Centered in its own slot, before any kerning moves the next one in
+    CTX.translate(
+      (advanceFor(character, options) - letterBoundingBoxWidth) / 2,
+      0
+    );
+    drawGlyph(character, index);
+    CTX.restore();
 
     CTX.translate(advanceAt(word, index, options), 0);
   });
 
   CTX.restore();
 };
+
+// Draws a word with its top left at the origin, in the same units a single
+// glyph uses. `fill` takes either a color or a function of the letter's index,
+// which is what lets the spelling progress line dim the letters not reached yet
+export const fillWord = (CTX, word, fill, options = {}) =>
+  eachGlyph(CTX, word, options, (character, index) => {
+    const path = allPathObjects[character];
+
+    if (path) {
+      CTX.fillStyle = typeof fill === "function" ? fill(index) : fill;
+      CTX.fill(path);
+    }
+  });
+
+// Every glyph sits on a baseline at 93 with the rest of its 115 unit box left
+// empty, which is where a bar goes: under the deepest tail the alphabet has,
+// and still inside the box, so underlining a letter doesn't change how tall a
+// line of them is
+const underlineCenter = 109;
+// Set to the weight of the letterforms' own strokes, so the bar reads as
+// drawn with the same pen rather than ruled underneath them
+const underlineThickness = 12;
+// A bar stopping exactly where the ink does reads as short, since a letter is
+// rarely at its widest down at its foot
+const underlineOvershoot = 5;
+
+// A bar under a letter, drawn in the same units and the same places as the
+// letters themselves. `color` takes a color or a function of the index that
+// can return nothing, which is what lets one letter of a word carry a bar
+// while the rest go without
+export const underlineWord = (CTX, word, color, options = {}) =>
+  eachGlyph(CTX, word, options, (character, index) => {
+    const fill = typeof color === "function" ? color(index) : color;
+
+    if (!fill) return;
+
+    const width =
+      (inkWidths[character] || letterBoundingBoxWidth) + underlineOvershoot * 2;
+    // Stroked rather than filled, for caps as round as the letterforms'. Both
+    // ends come in by half the line's weight, so the caps land on the edges
+    // the bar is meant to reach rather than past them
+    const left = (letterBoundingBoxWidth - width + underlineThickness) / 2;
+
+    CTX.strokeStyle = fill;
+    CTX.lineWidth = underlineThickness;
+    CTX.lineCap = "round";
+    CTX.beginPath();
+    CTX.moveTo(left, underlineCenter);
+    CTX.lineTo(left + width - underlineThickness, underlineCenter);
+    CTX.stroke();
+  });

@@ -26,10 +26,17 @@ import {
   wordComplete,
   numberInterlude,
 } from "./sequence.js";
-import { letterColors, numberColors, ballColors } from "./colors.js";
+import {
+  letterColors,
+  numberColors,
+  ballColors,
+  white,
+  withAlpha,
+} from "./colors.js";
 import {
   allPathObjects,
   fillWord,
+  underlineWord,
   wordBoundingBoxWidth,
   letterBoundingBoxHeight,
   letterBoundingBoxWidth,
@@ -46,6 +53,24 @@ const initTime = Date.now();
 const debounceTime = 400;
 
 const wordEntranceDuration = 900;
+
+// A finished word gets read out one letter at a time — "M I L E S, Miles!" —
+// so whoever is watching along has something to say. The word lands before the
+// first letter lights up, then each one gets about as long as it takes to say
+const wordSpellOutDelay = 500;
+const wordSpellOutInterval = 700;
+// A beat with the whole word lit, after the last letter and before a tap can
+// move past it
+const wordSpellOutHold = 900;
+// However short the word, a celebration is easy to tap straight through
+// without noticing it was there
+const wordCelebrationMinimum = 5000;
+
+// The letters a word hasn't reached yet hang back rather than disappearing.
+// The word along the bottom is white on blue and holds up dimmer than the
+// celebration's colors do
+const unspelledProgressAlpha = 0.2;
+const unspelledWordAlpha = 0.3;
 
 // The word along the bottom is a fraction of the size of the one that fills
 // the screen, and tracking that reads as tight and deliberate at display size
@@ -75,6 +100,7 @@ let gameState = start;
 
 let displayLines = [];
 let textColor = letterColors[0];
+let spellOutColor = letterColors[1];
 let balls = [];
 let fireworks = [];
 let entranceStart = 0;
@@ -150,6 +176,11 @@ const showCurrentStep = () => {
     // A finished word takes a turn through the whole palette the same way a
     // single letter does, rather than always arriving in yellow
     textColor = nextCelebrationColor();
+    // The bar that tracks the spell-out is its own mark rather than part of
+    // the letter above it, so it doesn't share the word's color
+    spellOutColor = randomFrom(
+      ballColors.filter((color) => color !== textColor)
+    );
     balls = [];
     entranceStart = Date.now();
     addFireworks(fireworksPerBatch);
@@ -181,10 +212,17 @@ const popBalls = (ballsToPop) => {
   syncNumberToBalls();
 };
 
-// A finished word waits for a tap like everything else, but it gets long
-// enough on screen to land its entrance before a stray one can move past it
+// A finished word waits for a tap like everything else, but not before it has
+// been spelled out to the end and had a beat to sit there whole
 const minimumOnScreen = () =>
-  sequence.getStep() === wordComplete ? wordEntranceDuration : debounceTime;
+  sequence.getStep() === wordComplete
+    ? Math.max(
+        wordCelebrationMinimum,
+        wordSpellOutDelay +
+          sequence.getWord().length * wordSpellOutInterval +
+          wordSpellOutHold
+      )
+    : debounceTime;
 
 // Missing a ball shouldn't wipe the screen and start over. Once balls are out
 // there, the only way forward is to pop all of them
@@ -215,7 +253,9 @@ const addFireworks = (count) => {
 
 // Time being up should feel like the end of something good, not like the game
 // froze mid-letter. The screen stays here afterwards: nobody needs to be asked
-// a question at the end of a session, and taps still set off more fireworks
+// a question at the end of a session. The show it goes out on runs itself and
+// then stops, rather than answering taps for as long as they keep coming —
+// the end of a session is a wind down, not another thing to play with
 const startCelebration = () => {
   gameState = celebrating;
   displayLines = ["ALL", "DONE"];
@@ -254,7 +294,6 @@ makeStartScreen(
 );
 
 document.addEventListener("click", ({ clientX: x, clientY: y }) => {
-  if (gameState === celebrating) return addFireworks(1);
   if (gameState !== playing) return;
 
   const collidingBall = findBallAtPoint(balls, { x, y });
@@ -274,7 +313,6 @@ document.addEventListener("keydown", ({ repeat }) => {
 });
 
 document.addEventListener("keyup", ({ key }) => {
-  if (gameState === celebrating) return addFireworks(1);
   if (gameState !== playing) return;
 
   scaleSpring.updateProps({ stiffness: 80, damping: 6, mass: 0.9 });
@@ -290,8 +328,9 @@ document.addEventListener(
     // clicks its buttons are listening for
     if (gameState === start) return;
 
+    // Nothing to tap on the last screen, but the touch is still swallowed so
+    // the page can't be dragged around underneath it
     if (gameState === celebrating) {
-      addFireworks(1);
       e.preventDefault();
       return;
     }
@@ -339,8 +378,31 @@ document.addEventListener("touchmove", (e) => e.preventDefault(), {
   passive: false,
 });
 
-// The word so far, small and dim along the bottom, so a run of letters reads
-// as a word being built rather than letters that happen to be in order
+// Which letter of a finished word is lit right now. Negative while the word is
+// still arriving, and past the last letter once the whole thing has been read
+// out, so neither leaves a letter underlined
+const spellOutIndex = () =>
+  Math.floor(
+    (Date.now() - entranceStart - wordSpellOutDelay) / wordSpellOutInterval
+  );
+
+const wordIsSpelledOut = () => spellOutIndex() >= sequence.getWord().length;
+
+// Three states, so a word can be read aloud a letter at a time: the letter
+// being said now, the ones already said, and the ones still to come. When the
+// last one is said the whole word lights up together, exclamation point and all
+const spellOutFill = (index) =>
+  wordIsSpelledOut() || index <= spellOutIndex()
+    ? textColor
+    : withAlpha(textColor, unspelledWordAlpha);
+
+const spellOutUnderline = (index) =>
+  !wordIsSpelledOut() && index === spellOutIndex() ? spellOutColor : null;
+
+// The word so far, small along the bottom, so a run of letters reads as a word
+// being built rather than letters that happen to be in order. The letter on
+// screen right now is underlined in its own color, which is what ties the one
+// filling the screen to its place in the word
 const drawSpellingProgress = () => {
   const word = sequence.getWord();
   const letterIndex = sequence.getLetterIndex();
@@ -355,13 +417,18 @@ const drawSpellingProgress = () => {
     );
     CTX.scale(scaleFactor, scaleFactor);
 
+    underlineWord(
+      CTX,
+      word,
+      (index) => (index === letterIndex ? textColor : null),
+      progressTracking
+    );
+
     fillWord(
       CTX,
       word,
       (index) =>
-        index < letterIndex
-          ? "rgba(252, 246, 232, .7)"
-          : "rgba(252, 246, 232, .2)",
+        index <= letterIndex ? white : withAlpha(white, unspelledProgressAlpha),
       progressTracking
     );
   });
@@ -394,9 +461,6 @@ animate((deltaTime) => {
     easeInOutSine
   );
 
-  fireworks.forEach((firework) => firework.draw(deltaTime));
-  fireworks = fireworks.filter((firework) => !firework.isGone());
-
   // Drawing a ball is what moves it, so collisions get resolved against where
   // everything came to rest on the previous frame
   balls.forEach((ballA) => {
@@ -423,6 +487,9 @@ animate((deltaTime) => {
     // a word, which gets a margin and an entrance
     const isSingleGlyph =
       displayLines.length === 1 && displayLines[0].length === 1;
+    // ALL DONE is a word on screen too, but it isn't one anybody spelled
+    const spellingOutWord =
+      gameState === playing && sequence.getStep() === wordComplete;
     const lineWidths = displayLines.map(wordBoundingBoxWidth);
     const contentWidth = isSingleGlyph
       ? letterBoundingBoxWidth
@@ -469,12 +536,24 @@ animate((deltaTime) => {
             (contentWidth - lineWidths[index]) / 2,
             index * lineAdvance
           );
-          fillWord(CTX, line, textColor);
+
+          if (spellingOutWord) {
+            underlineWord(CTX, line, spellOutUnderline);
+            fillWord(CTX, line, spellOutFill);
+          } else {
+            fillWord(CTX, line, textColor);
+          }
+
           CTX.restore();
         });
       }
     });
   }
+
+  // Fireworks go off in front of the word they're celebrating. The balls stay
+  // behind it, where they can't get between a letter and the person reading it
+  fireworks.forEach((firework) => firework.draw(deltaTime));
+  fireworks = fireworks.filter((firework) => !firework.isGone());
 
   if (gameState === playing && sequence.getStep() === spelling) {
     drawSpellingProgress();
