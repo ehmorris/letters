@@ -67,19 +67,25 @@ const names = {
   CARY: ["C", "AR", "Y"],
 };
 
-// How long a sound is held when a word is being said slowly. Sounding out
-// isn't an even beat, and giving it one is what made the pairs feel hurried:
-// SH got the same flick as F, when saying it slowly means leaning on it.
+// How long a sound is held. Nobody is reading these to themselves: a grown up
+// says them out loud as they light up and a small kid says them back, so every
+// beat has to fit two goes at the sound, and the slow one is the kid's. They're
+// two, they're still finding the sound, and they won't be hurried. Timed for
+// one adult reading slowly — which is what these were at first — the highlight
+// has moved on before the kid has started.
 //
-// A stop is over the moment it starts — there's no holding the CK of DUCK — a
-// consonant you can hum runs on for as long as there's breath, a vowel
-// stretches furthest of all, and a blend is two sounds where everything else
-// here is one. "D, uuu, ck" is the rhythm of DUCK said slowly, and it isn't
-// three of anything.
-const stopBeat = 500;
-const heldBeat = 680;
-const vowelBeat = 820;
-const blendBeat = 900;
+// Within that, sounding out isn't an even beat either. A stop is over the
+// moment it starts — there's no holding the CK of DUCK — a consonant you can
+// hum runs on for as long as there's breath, a vowel stretches furthest of
+// all, and a blend is two sounds where everything else here is one. "D, uuu,
+// ck" is the rhythm of DUCK said slowly, and it isn't three of anything.
+//
+// So: room for a grown up and then a kid, and the shape of the sound on top.
+// Scaling all four together keeps that shape while changing the pace
+const stopBeat = 900;
+const heldBeat = 1200;
+const vowelBeat = 1450;
+const blendBeat = 1600;
 
 const soundBeats = {
   B: stopBeat, C: stopBeat, D: stopBeat, G: stopBeat, K: stopBeat,

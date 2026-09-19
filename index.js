@@ -80,24 +80,30 @@ const fireworkLaunchInterval = 2600;
 // None of that starts until the fireworks are done and the word has had a beat
 // to itself. A burst landing on the letter being read is the one thing on
 // screen that can pull an eye off it, and the fireworks are worth watching on
-// their own rather than through a word being spelled. Then each letter gets
-// about as long as it takes to say
+// their own rather than through a word being spelled.
+//
+// Then each letter gets long enough for a grown up to say it and a small kid
+// to say it back. The kid is the slow one — two years old, still finding the
+// letter, and not to be hurried — and everything below is paced off them
+// rather than off one adult reading at a comfortable clip
 const wordFireworkBeat = 400;
 const wordSpellOutDelay = wordFireworkStagger + fireworkRise + wordFireworkBeat;
-const wordSpellOutInterval = 700;
+const wordSpellOutInterval = 1300;
 // Between the letters and the sounds, a breath. It's the pause you take before
-// starting over, and without it the bar jumping back to the front of the word
-// reads as a glitch rather than as a second pass
-const wordSoundOutDelay = 350;
+// starting over, long enough that two people who were mid word can both stop,
+// and without it the bar jumping back to the front reads as a glitch rather
+// than as a second pass
+const wordSoundOutDelay = 500;
 // Sounds don't share a beat the way letters do — how long each one is held is
 // in words.js, next to the sounds themselves. Naming a letter takes about as
 // long whichever letter it is; saying one doesn't
 //
 // Then the word as one thing: a line drawn left to right underneath it, about
 // as long as running a finger under it while saying it
-const wordReadDuration = 600;
-// A beat with the whole word lit and underlined, before a tap can move past it
-const wordSpellOutHold = 900;
+const wordReadDuration = 900;
+// The line arrives with the grown up saying the word, and the hold is the kid
+// saying it back, so it's the longest single beat in the celebration
+const wordSpellOutHold = 1400;
 // However short the word, a celebration is easy to tap straight through
 // without noticing it was there
 const wordCelebrationMinimum = 5000;
