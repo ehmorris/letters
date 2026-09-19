@@ -54,12 +54,35 @@ const debounceTime = 400;
 
 const wordEntranceDuration = 900;
 
+// Fireworks go up both when a word is finished and when a session is. Eight at
+// a time is what bubbles launches, and since each one carries its own delay a
+// batch steps itself out rather than going up as a wall
+const fireworksPerBatch = 8;
+// The show at the end of a session has the screen to itself and can take its
+// time. The one that goes up with a finished word is holding that word's
+// letters up, so it goes off closer together and gets out of the way sooner
+const wordFireworkStagger = 400;
+// How long a firework spends climbing before it bursts. Measured rather than
+// worked out from the launch velocity, since what's wanted here is when the
+// last one goes off rather than where any of them got to
+const fireworkRise = 1600;
+const fireworkRounds = 3;
+// Long enough that a batch has mostly finished before the next one goes up.
+// Stacking them closer just puts more on screen at once than anyone can watch
+const fireworkLaunchInterval = 2600;
+
 // A finished word gets read back the way you'd read it to someone: the letters
 // one at a time, then the sounds those letters make together, then the word
 // itself — "M I L E S, Miles!" — so whoever is watching along has something to
-// say at every stage. The word lands before the first letter lights up, then
-// each one gets about as long as it takes to say
-const wordSpellOutDelay = 500;
+// say at every stage.
+//
+// None of that starts until the fireworks are done and the word has had a beat
+// to itself. A burst landing on the letter being read is the one thing on
+// screen that can pull an eye off it, and the fireworks are worth watching on
+// their own rather than through a word being spelled. Then each letter gets
+// about as long as it takes to say
+const wordFireworkBeat = 400;
+const wordSpellOutDelay = wordFireworkStagger + fireworkRise + wordFireworkBeat;
 const wordSpellOutInterval = 700;
 // Between the letters and the sounds, a breath. It's the pause you take before
 // starting over, and without it the bar jumping back to the front of the word
@@ -88,15 +111,6 @@ const unspelledWordAlpha = 0.3;
 // the screen, and tracking that reads as tight and deliberate at display size
 // reads as clumped at this one
 const progressTracking = { extraTracking: 16 };
-
-// A session ends with a fireworks show rather than a screen that just stops.
-// Eight at a time is what bubbles launches, and since each one carries its own
-// delay of up to 1.2s a batch steps itself out rather than going up as a wall
-const fireworksPerBatch = 8;
-const fireworkRounds = 3;
-// Long enough that a batch has mostly finished before the next one goes up.
-// Stacking them closer just puts more on screen at once than anyone can watch
-const fireworkLaunchInterval = 2600;
 
 // Stacked lines are set closer together than a full glyph box, since the ink
 // only fills the middle of it
@@ -242,7 +256,7 @@ const showCurrentStep = ({ announce = true } = {}) => {
     spellOutPlan = planSpellOut(sequence.getWord(), sequence.getSoundGroups());
     lastSpokenPass = null;
     lastSpokenIndex = null;
-    addFireworks(fireworksPerBatch);
+    addFireworks(fireworksPerBatch, wordFireworkStagger);
   } else {
     const number = sequence.getInterludeNumber();
     displayLines = [String(number)];
@@ -302,9 +316,11 @@ const keyAdvancesSequence = (key) =>
     ? key.toUpperCase() === sequence.getLetter()
     : true;
 
-const addFireworks = (count) => {
+const addFireworks = (count, launchStagger) => {
   fireworks = fireworks.concat(
-    new Array(count).fill().map(() => makeFirework(canvasManager, audioManager))
+    new Array(count)
+      .fill()
+      .map(() => makeFirework(canvasManager, audioManager, { launchStagger }))
   );
   lastFireworkLaunch = Date.now();
 };
