@@ -262,28 +262,58 @@ const underlineThickness = 12;
 // rarely at its widest down at its foot
 const underlineOvershoot = 5;
 
-// A bar under a letter, drawn in the same units and the same places as the
-// letters themselves. `color` takes a color or a function of the index that
-// can return nothing, which is what lets one letter of a word carry a bar
-// while the rest go without
-export const underlineWord = (CTX, word, color, options = {}) =>
-  eachGlyph(CTX, word, options, (character, index) => {
-    const fill = typeof color === "function" ? color(index) : color;
+// Where a bar under a run of letters reaches, in the units the letters are
+// drawn in: from the left edge of the first letter's ink to the right edge of
+// the last letter's, plus the overshoot on each end. Walking the whole word
+// rather than the range, since where a letter sits depends on everything
+// kerned in front of it
+const underlineExtent = (word, from, to, options) => {
+  let offset = 0;
+  let left = 0;
+  let right = 0;
 
-    if (!fill) return;
+  word.split("").forEach((character, index) => {
+    if (index >= from && index <= to) {
+      const centering =
+        (advanceFor(character, options) - letterBoundingBoxWidth) / 2;
+      const inkWidth = inkWidths[character] || letterBoundingBoxWidth;
+      const inkLeft =
+        offset + centering + (letterBoundingBoxWidth - inkWidth) / 2;
 
-    const width =
-      (inkWidths[character] || letterBoundingBoxWidth) + underlineOvershoot * 2;
-    // Stroked rather than filled, for caps as round as the letterforms'. Both
-    // ends come in by half the line's weight, so the caps land on the edges
-    // the bar is meant to reach rather than past them
-    const left = (letterBoundingBoxWidth - width + underlineThickness) / 2;
+      if (index === from) left = inkLeft - underlineOvershoot;
+      right = inkLeft + inkWidth + underlineOvershoot;
+    }
 
-    CTX.strokeStyle = fill;
-    CTX.lineWidth = underlineThickness;
-    CTX.lineCap = "round";
-    CTX.beginPath();
-    CTX.moveTo(left, underlineCenter);
-    CTX.lineTo(left + width - underlineThickness, underlineCenter);
-    CTX.stroke();
+    offset += advanceAt(word, index, options);
   });
+
+  return { left, right };
+};
+
+// A bar under a run of a word's letters, drawn in the same units and the same
+// place as the letters themselves. One letter is a range of one, which is what
+// the spelling progress line and the celebration's per-letter bar both draw;
+// a `progress` below 1 stops the bar short of its right hand end, which is how
+// it gets drawn on under a whole word at the end of a celebration
+export const underlineRange = (CTX, word, color, range = {}, options = {}) => {
+  const { from = 0, to = word.length - 1, progress = 1 } = range;
+
+  // A stroke of no length still puts down two round caps, so a bar that hasn't
+  // started yet would show up as a dot under the first letter
+  if (!color || progress <= 0) return;
+
+  const { left, right } = underlineExtent(word, from, to, options);
+  // Stroked rather than filled, for caps as round as the letterforms'. Both
+  // ends come in by half the line's weight, so the caps land on the edges the
+  // bar is meant to reach rather than past them
+  const start = left + underlineThickness / 2;
+  const length = right - left - underlineThickness;
+
+  CTX.strokeStyle = color;
+  CTX.lineWidth = underlineThickness;
+  CTX.lineCap = "round";
+  CTX.beginPath();
+  CTX.moveTo(start, underlineCenter);
+  CTX.lineTo(start + length * progress, underlineCenter);
+  CTX.stroke();
+};

@@ -3,7 +3,11 @@ import { randomColor } from "./colors.js";
 import { randomBetween } from "./helpers.js";
 
 // Lifted from https://github.com/ehmorris/bubbles/blob/main/firework.js
-export const makeFirework = (canvasManager, audioManager) => {
+export const makeFirework = (
+  canvasManager,
+  audioManager,
+  { launchStagger = 1200 } = {}
+) => {
   const baseBall = makeBall(canvasManager, {
     startPosition: {
       x: randomBetween(0, canvasManager.getWidth()),
@@ -12,7 +16,7 @@ export const makeFirework = (canvasManager, audioManager) => {
     startVelocity: { x: randomBetween(-1, 1), y: randomBetween(-8, -10) },
     radius: randomBetween(6, 14),
     fill: randomColor(),
-    delay: randomBetween(0, 1200),
+    delay: randomBetween(0, launchStagger),
     // A firework launches from below the bottom edge and its burst rains back
     // down through it, so nothing about it should bounce off the walls
     bounce: false,

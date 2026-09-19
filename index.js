@@ -36,7 +36,7 @@ import {
 import {
   allPathObjects,
   fillWord,
-  underlineWord,
+  underlineRange,
   wordBoundingBoxWidth,
   letterBoundingBoxHeight,
   letterBoundingBoxWidth,
@@ -54,13 +54,48 @@ const debounceTime = 400;
 
 const wordEntranceDuration = 900;
 
-// A finished word gets read out one letter at a time — "M I L E S, Miles!" —
-// so whoever is watching along has something to say. The word lands before the
-// first letter lights up, then each one gets about as long as it takes to say
-const wordSpellOutDelay = 500;
+// Fireworks go up both when a word is finished and when a session is. Eight at
+// a time is what bubbles launches, and since each one carries its own delay a
+// batch steps itself out rather than going up as a wall
+const fireworksPerBatch = 8;
+// The show at the end of a session has the screen to itself and can take its
+// time. The one that goes up with a finished word is holding that word's
+// letters up, so it goes off closer together and gets out of the way sooner
+const wordFireworkStagger = 400;
+// How long a firework spends climbing before it bursts. Measured rather than
+// worked out from the launch velocity, since what's wanted here is when the
+// last one goes off rather than where any of them got to
+const fireworkRise = 1600;
+const fireworkRounds = 3;
+// Long enough that a batch has mostly finished before the next one goes up.
+// Stacking them closer just puts more on screen at once than anyone can watch
+const fireworkLaunchInterval = 2600;
+
+// A finished word gets read back the way you'd read it to someone: the letters
+// one at a time, then the sounds those letters make together, then the word
+// itself — "M I L E S, Miles!" — so whoever is watching along has something to
+// say at every stage.
+//
+// None of that starts until the fireworks are done and the word has had a beat
+// to itself. A burst landing on the letter being read is the one thing on
+// screen that can pull an eye off it, and the fireworks are worth watching on
+// their own rather than through a word being spelled. Then each letter gets
+// about as long as it takes to say
+const wordFireworkBeat = 400;
+const wordSpellOutDelay = wordFireworkStagger + fireworkRise + wordFireworkBeat;
 const wordSpellOutInterval = 700;
-// A beat with the whole word lit, after the last letter and before a tap can
-// move past it
+// Between the letters and the sounds, a breath. It's the pause you take before
+// starting over, and without it the bar jumping back to the front of the word
+// reads as a glitch rather than as a second pass
+const wordSoundOutDelay = 350;
+// Sounds run quicker than letters. Blending is the part that's meant to run
+// together, and holding each chunk as long as a whole letter pulls the word
+// back apart into pieces
+const wordSoundOutInterval = 500;
+// Then the word as one thing: a line drawn left to right underneath it, about
+// as long as running a finger under it while saying it
+const wordReadDuration = 600;
+// A beat with the whole word lit and underlined, before a tap can move past it
 const wordSpellOutHold = 900;
 // However short the word, a celebration is easy to tap straight through
 // without noticing it was there
@@ -76,15 +111,6 @@ const unspelledWordAlpha = 0.3;
 // the screen, and tracking that reads as tight and deliberate at display size
 // reads as clumped at this one
 const progressTracking = { extraTracking: 16 };
-
-// A session ends with a fireworks show rather than a screen that just stops.
-// Eight at a time is what bubbles launches, and since each one carries its own
-// delay of up to 1.2s a batch steps itself out rather than going up as a wall
-const fireworksPerBatch = 8;
-const fireworkRounds = 3;
-// Long enough that a batch has mostly finished before the next one goes up.
-// Stacking them closer just puts more on screen at once than anyone can watch
-const fireworkLaunchInterval = 2600;
 
 // Stacked lines are set closer together than a full glyph box, since the ink
 // only fills the middle of it
@@ -107,10 +133,12 @@ let entranceStart = 0;
 let fireworkRoundsLaunched = 0;
 let lastStepChange = Date.now();
 let lastFireworkLaunch = 0;
-// The last letter of a finished word to have been said out loud, so the run of
-// notes is driven by the same clock the highlight is rather than by a second
-// set of timers that can drift away from it
-let lastSpelledIndex = null;
+// The shape of the celebration on screen, worked out once when its word lands
+let spellOutPlan = null;
+// What of it has been said out loud, so the notes are driven by the same clock
+// the bar is rather than by a second set of timers that can drift away from it
+let lastSpokenPass = null;
+let lastSpokenIndex = null;
 
 const scaleSpring = makeSpring(1, {
   stiffness: 100,
@@ -121,6 +149,39 @@ const scaleSpring = makeSpring(1, {
 
 const randomFrom = (options) =>
   options[Math.floor(Math.random() * options.length)];
+
+// The three passes a finished word gets read back in
+const sayingLetters = "sayingLetters";
+const sayingSounds = "sayingSounds";
+const sayingWord = "sayingWord";
+
+// Worked out once when a word lands rather than on every frame. Every time in
+// here is measured from the moment the word arrived on screen. A word with no
+// sounds worth grouping — CAT, whose letters are already its sounds — gets a
+// sound pass of no length, so it goes from its letters straight to being read
+const planSpellOut = (word, groups) => {
+  const lettersEnd = wordSpellOutDelay + word.length * wordSpellOutInterval;
+  const soundsStart = lettersEnd + (groups ? wordSoundOutDelay : 0);
+  const soundsEnd =
+    soundsStart + (groups ? groups.length * wordSoundOutInterval : 0);
+  let letterIndex = 0;
+
+  return {
+    lettersStart: wordSpellOutDelay,
+    lettersEnd,
+    soundsStart,
+    soundsEnd,
+    readingEnd: soundsEnd + wordReadDuration,
+    // Each sound as the run of letters that spells it, so the bar under a
+    // sound is drawn the same way the bar under a single letter is
+    soundRanges: (groups || []).map((sound) => {
+      const from = letterIndex;
+      letterIndex += sound.length;
+
+      return { from, to: letterIndex - 1 };
+    }),
+  };
+};
 
 // Letters and numbers come and go too fast for a repeat to register, but a
 // celebration is a moment — two in a row in the same color reads as a bug
@@ -192,8 +253,10 @@ const showCurrentStep = ({ announce = true } = {}) => {
     );
     balls = [];
     entranceStart = Date.now();
-    lastSpelledIndex = null;
-    addFireworks(fireworksPerBatch);
+    spellOutPlan = planSpellOut(sequence.getWord(), sequence.getSoundGroups());
+    lastSpokenPass = null;
+    lastSpokenIndex = null;
+    addFireworks(fireworksPerBatch, wordFireworkStagger);
   } else {
     const number = sequence.getInterludeNumber();
     displayLines = [String(number)];
@@ -224,14 +287,12 @@ const popBalls = (ballsToPop) => {
 };
 
 // A finished word waits for a tap like everything else, but not before it has
-// been spelled out to the end and had a beat to sit there whole
+// been spelled out, sounded out, read back, and had a beat to sit there whole
 const minimumOnScreen = () =>
   sequence.getStep() === wordComplete
     ? Math.max(
         wordCelebrationMinimum,
-        wordSpellOutDelay +
-          sequence.getWord().length * wordSpellOutInterval +
-          wordSpellOutHold
+        spellOutPlan.readingEnd + wordSpellOutHold
       )
     : debounceTime;
 
@@ -255,9 +316,11 @@ const keyAdvancesSequence = (key) =>
     ? key.toUpperCase() === sequence.getLetter()
     : true;
 
-const addFireworks = (count) => {
+const addFireworks = (count, launchStagger) => {
   fireworks = fireworks.concat(
-    new Array(count).fill().map(() => makeFirework(canvasManager, audioManager))
+    new Array(count)
+      .fill()
+      .map(() => makeFirework(canvasManager, audioManager, { launchStagger }))
   );
   lastFireworkLaunch = Date.now();
 };
@@ -391,41 +454,87 @@ document.addEventListener("touchmove", (e) => e.preventDefault(), {
   passive: false,
 });
 
-// Which letter of a finished word is lit right now. Negative while the word is
-// still arriving, and past the last letter once the whole thing has been read
-// out, so neither leaves a letter underlined
-const spellOutIndex = () =>
-  Math.floor(
-    (Date.now() - entranceStart - wordSpellOutDelay) / wordSpellOutInterval
-  );
+// Where a celebration has got to: which pass is running, and how far into it.
+// An index below zero is a pass that hasn't said anything yet — the word still
+// arriving, or the breath between the letters and the sounds — which is what
+// lets both of those be waited out without a special case
+const spellOutBeat = () => {
+  const elapsed = Date.now() - entranceStart;
+  const { lettersStart, lettersEnd, soundsStart, soundsEnd, readingEnd } =
+    spellOutPlan;
 
-const wordIsSpelledOut = () => spellOutIndex() >= sequence.getWord().length;
+  if (elapsed < lettersStart) return { pass: sayingLetters, index: -1 };
 
-// Three states, so a word can be read aloud a letter at a time: the letter
-// being said now, the ones already said, and the ones still to come. When the
-// last one is said the whole word lights up together
-const spellOutFill = (index) =>
-  wordIsSpelledOut() || index <= spellOutIndex()
+  if (elapsed < lettersEnd) {
+    return {
+      pass: sayingLetters,
+      index: Math.floor((elapsed - lettersStart) / wordSpellOutInterval),
+    };
+  }
+
+  if (elapsed < soundsStart) return { pass: sayingSounds, index: -1 };
+
+  if (elapsed < soundsEnd) {
+    return {
+      pass: sayingSounds,
+      index: Math.floor((elapsed - soundsStart) / wordSoundOutInterval),
+    };
+  }
+
+  return {
+    pass: sayingWord,
+    index: 0,
+    progress: transition(
+      0,
+      1,
+      clampedProgress(soundsEnd, readingEnd, elapsed),
+      easeInOutSine
+    ),
+  };
+};
+
+// Letters come up to full as they're said and stay there, so by the end of the
+// first pass the word is whole. Nothing dims again after that: the sounds and
+// the reading are the bar's to carry
+const spellOutFill = (beat) => (index) =>
+  beat.pass !== sayingLetters || index <= beat.index
     ? textColor
     : withAlpha(textColor, unspelledWordAlpha);
 
-const spellOutUnderline = (index) =>
-  !wordIsSpelledOut() && index === spellOutIndex() ? spellOutColor : null;
+// One bar carries the whole celebration: under a letter while the word is
+// being spelled, under a sound while it's being sounded out, then drawn on
+// along the whole word as it's read back. Nothing to draw during the entrance
+// or the breath between passes
+const spellOutBar = (beat) => {
+  if (beat.index < 0) return null;
 
-// A note under each letter as it lights up, and a chord under the whole word
-// at the end. Read off the highlight rather than scheduled alongside it, so
-// what's heard is what's on screen. The index only ever climbs, which is what
-// keeps the closing chord to one playing
-const playSpellOutNotes = () => {
-  const index = spellOutIndex();
+  if (beat.pass === sayingLetters) return { from: beat.index, to: beat.index };
 
-  if (index < 0 || index === lastSpelledIndex) return;
+  if (beat.pass === sayingSounds) return spellOutPlan.soundRanges[beat.index];
 
-  lastSpelledIndex = index;
+  return {
+    from: 0,
+    to: sequence.getWord().length - 1,
+    progress: beat.progress,
+  };
+};
 
-  if (index < sequence.getWord().length) {
-    audioManager.playSpellOutLetter(index);
-  } else if (index === sequence.getWord().length) {
+// A note as each letter is said, as each sound is said, and a chord as the
+// word is read back. Read off the same beat the bar is rather than scheduled
+// alongside it, so what's heard is what's on screen even if a frame runs long
+const playSpellOutNotes = (beat) => {
+  if (beat.pass === lastSpokenPass && beat.index === lastSpokenIndex) return;
+
+  lastSpokenPass = beat.pass;
+  lastSpokenIndex = beat.index;
+
+  if (beat.index < 0) return;
+
+  if (beat.pass === sayingLetters) {
+    audioManager.playSpellOutLetter(beat.index);
+  } else if (beat.pass === sayingSounds) {
+    audioManager.playSoundGroup(beat.index);
+  } else {
     audioManager.playWordSpelled();
   }
 };
@@ -448,10 +557,11 @@ const drawSpellingProgress = () => {
     );
     CTX.scale(scaleFactor, scaleFactor);
 
-    underlineWord(
+    underlineRange(
       CTX,
       word,
-      (index) => (index === letterIndex ? textColor : null),
+      textColor,
+      { from: letterIndex, to: letterIndex },
       progressTracking
     );
 
@@ -471,9 +581,15 @@ animate((deltaTime) => {
 
   if (gameState === playing && timer.update()) startCelebration();
 
-  if (gameState === playing && sequence.getStep() === wordComplete) {
-    playSpellOutNotes();
-  }
+  // Where the celebration on screen has got to, worked out once a frame so the
+  // notes and the bar can't disagree about it. ALL DONE is a word on screen
+  // too, but it isn't one anybody spelled, so it doesn't get read back
+  const beat =
+    gameState === playing && sequence.getStep() === wordComplete
+      ? spellOutBeat()
+      : null;
+
+  if (beat) playSpellOutNotes(beat);
 
   if (
     gameState === celebrating &&
@@ -522,9 +638,6 @@ animate((deltaTime) => {
     // a word, which gets a margin and an entrance
     const isSingleGlyph =
       displayLines.length === 1 && displayLines[0].length === 1;
-    // ALL DONE is a word on screen too, but it isn't one anybody spelled
-    const spellingOutWord =
-      gameState === playing && sequence.getStep() === wordComplete;
     const lineWidths = displayLines.map(wordBoundingBoxWidth);
     const contentWidth = isSingleGlyph
       ? letterBoundingBoxWidth
@@ -572,9 +685,11 @@ animate((deltaTime) => {
             index * lineAdvance
           );
 
-          if (spellingOutWord) {
-            underlineWord(CTX, line, spellOutUnderline);
-            fillWord(CTX, line, spellOutFill);
+          if (beat) {
+            const bar = spellOutBar(beat);
+
+            if (bar) underlineRange(CTX, line, spellOutColor, bar);
+            fillWord(CTX, line, spellOutFill(beat));
           } else {
             fillWord(CTX, line, textColor);
           }

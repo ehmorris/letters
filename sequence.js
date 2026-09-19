@@ -1,4 +1,4 @@
-import { makeWordPicker } from "./words.js";
+import { makeWordPicker, soundGroupsFor } from "./words.js";
 import { randomBetween } from "./helpers.js";
 
 export const spelling = "spelling";
@@ -43,6 +43,7 @@ export const makeSequence = () => {
     getWord: () => word,
     getLetter: () => word[letterIndex],
     getLetterIndex: () => letterIndex,
+    getSoundGroups: () => soundGroupsFor(word),
     getInterludeNumber: () => interludeNumber,
   };
 };
