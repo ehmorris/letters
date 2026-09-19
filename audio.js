@@ -164,11 +164,17 @@ export const makeAudioManager = () => {
   const playSpellOutLetter = (index) =>
     _playNotes([index], { duration: 0.4, gain: 0.15 });
 
-  // The word whole, once the last letter has been said. A chord rather than
-  // another step up the scale, and left ringing long enough to read as the end
-  // of the run rather than as one more letter
+  // Sounding a word out, a chunk at a time, after its letters have been said
+  // one at a time. The same climb the letters got, shorter and further back,
+  // so it reads as the same phrase said again rather than as a new one
+  const playSoundGroup = (index) =>
+    _playNotes([index], { duration: 0.32, gain: 0.12 });
+
+  // The word whole, once its sounds have been said. A chord rather than
+  // another step up the scale, spread out across about as long as the line
+  // under the word takes to draw, so the two land as one gesture
   const playWordSpelled = () =>
-    _playNotes([0, 2, 4], { duration: 1.1, gain: 0.13, stagger: 0.07 });
+    _playNotes([0, 2, 4], { duration: 1.1, gain: 0.13, stagger: 0.2 });
 
   // Time's up. Rolled out slowly and left to ring under the fireworks, so the
   // end of a session sounds like a wind down rather than a buzzer
@@ -182,6 +188,7 @@ export const makeAudioManager = () => {
     playSessionStart,
     playGlyphChange,
     playSpellOutLetter,
+    playSoundGroup,
     playWordSpelled,
     playSessionEnd,
   };
