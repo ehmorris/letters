@@ -12,6 +12,26 @@ const pluckPaths = [
   "./sounds/pluck6.mp3",
 ];
 
+// Everything that isn't a pop is synthesized rather than loaded. The plucks
+// are soft mallet hits — a quick attack and a long tail with an octave ringing
+// over the fundamental — and a sine pair with the same envelope sits next to
+// them without sounding like it came from somewhere else
+//
+// A major pentatonic, so two of these landing on top of each other — a letter
+// lighting up while a firework goes off — is still a chord rather than a clash
+const pentatonicSemitones = [0, 2, 4, 7, 9];
+const baseFrequency = 523.25;
+
+// Steps climb through the scale and keep climbing into the next octave, so a
+// run of notes can be as long as the longest word without running out
+const scaleFrequency = (step) => {
+  const octave = Math.floor(step / pentatonicSemitones.length);
+  const semitones =
+    pentatonicSemitones[step % pentatonicSemitones.length] + octave * 12;
+
+  return baseFrequency * Math.pow(2, semitones / 12);
+};
+
 export const makeAudioManager = () => {
   let hasInitialized = false;
   let audioCTX;
@@ -59,6 +79,60 @@ export const makeAudioManager = () => {
     }
   }
 
+  // One voice: a sine with a quieter octave above it, swelling in a few
+  // milliseconds and then decaying the way a struck key does. A linear fade
+  // would click at the end; an exponential one lands on silence
+  const _playNote = (frequency, startTime, duration, gain) => {
+    const envelope = new GainNode(audioCTX, { gain: 0 });
+    envelope.connect(audioCTX.destination);
+    envelope.gain.setValueAtTime(0, startTime);
+    envelope.gain.linearRampToValueAtTime(gain, startTime + 0.01);
+    envelope.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+
+    [
+      [frequency, 1],
+      [frequency * 2, 0.22],
+    ].forEach(([partialFrequency, level]) => {
+      const oscillator = new OscillatorNode(audioCTX, {
+        type: "sine",
+        frequency: partialFrequency,
+      });
+      const partialGain = new GainNode(audioCTX, { gain: level });
+      oscillator.connect(partialGain).connect(envelope);
+      oscillator.start(startTime);
+      oscillator.stop(startTime + duration);
+    });
+  };
+
+  // Notes are scale steps rather than frequencies, and stagger is the gap
+  // between one and the next, which is what makes a chord an arpeggio
+  async function _playNotes(
+    steps,
+    { duration = 0.6, gain = 0.16, stagger = 0 } = {}
+  ) {
+    if (!hasInitialized) initialize();
+
+    try {
+      await audioCTX.resume();
+
+      // Scheduled against the clock as it reads after the resume, so a context
+      // that took a moment to open doesn't play the whole run at once
+      const startTime = audioCTX.currentTime;
+
+      steps.forEach((step, index) => {
+        _playNote(
+          scaleFrequency(step),
+          startTime + index * stagger,
+          duration,
+          gain
+        );
+      });
+    } catch (e) {
+      // Same as above: a context that won't open isn't worth a console full of
+      // rejections
+    }
+  }
+
   // Stepping through the plucks in order reads as deliberate when a handful of
   // balls pop together. Picking at random reads like a mistake
   const playSequentialPluck = () => {
@@ -74,5 +148,41 @@ export const makeAudioManager = () => {
 
   const resetPluckSequence = () => (lastPluckIndex = null);
 
-  return { initialize, playSequentialPluck, resetPluckSequence };
+  // Picking a time limit is the one tap of a session a grown up makes, and it
+  // used to be answered by nothing at all. Two notes, so it reads as a door
+  // opening rather than as something being confirmed
+  const playSessionStart = () => _playNotes([0, 4], { stagger: 0.1 });
+
+  // A new letter or digit arriving. During a word the pitch climbs with the
+  // letter's place in it, which is the same thing the bar along the bottom is
+  // saying: this is going somewhere and you're partway there
+  const playGlyphChange = (step = 0) =>
+    _playNotes([step], { duration: 0.45, gain: 0.14 });
+
+  // Each letter of a finished word as it lights up. Short, since the next one
+  // is only a beat behind, and climbing so the word is read rather than listed
+  const playSpellOutLetter = (index) =>
+    _playNotes([index], { duration: 0.4, gain: 0.15 });
+
+  // The word whole, once the last letter has been said. A chord rather than
+  // another step up the scale, and left ringing long enough to read as the end
+  // of the run rather than as one more letter
+  const playWordSpelled = () =>
+    _playNotes([0, 2, 4], { duration: 1.1, gain: 0.13, stagger: 0.07 });
+
+  // Time's up. Rolled out slowly and left to ring under the fireworks, so the
+  // end of a session sounds like a wind down rather than a buzzer
+  const playSessionEnd = () =>
+    _playNotes([0, 2, 4, 7], { duration: 1.8, gain: 0.12, stagger: 0.16 });
+
+  return {
+    initialize,
+    playSequentialPluck,
+    resetPluckSequence,
+    playSessionStart,
+    playGlyphChange,
+    playSpellOutLetter,
+    playWordSpelled,
+    playSessionEnd,
+  };
 };

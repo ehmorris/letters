@@ -107,6 +107,10 @@ let entranceStart = 0;
 let fireworkRoundsLaunched = 0;
 let lastStepChange = Date.now();
 let lastFireworkLaunch = 0;
+// The last letter of a finished word to have been said out loud, so the run of
+// notes is driven by the same clock the highlight is rather than by a second
+// set of timers that can drift away from it
+let lastSpelledIndex = null;
 
 const scaleSpring = makeSpring(1, {
   stiffness: 100,
@@ -164,15 +168,20 @@ const spawnBalls = (number) => {
   );
 };
 
-const showCurrentStep = () => {
+// A session's first step is announced by the start screen's own sound, so it
+// arrives without a second one over the top of it
+const showCurrentStep = ({ announce = true } = {}) => {
   const step = sequence.getStep();
 
   if (step === spelling) {
     displayLines = [sequence.getLetter()];
     textColor = randomFrom(letterColors);
     balls = [];
+    if (announce) audioManager.playGlyphChange(sequence.getLetterIndex());
   } else if (step === wordComplete) {
-    displayLines = [`${sequence.getWord()}!`];
+    // No exclamation point: set in the same letterforms as the word, at the
+    // same size, it was being read as one more letter to sound out
+    displayLines = [sequence.getWord()];
     // A finished word takes a turn through the whole palette the same way a
     // single letter does, rather than always arriving in yellow
     textColor = nextCelebrationColor();
@@ -183,12 +192,14 @@ const showCurrentStep = () => {
     );
     balls = [];
     entranceStart = Date.now();
+    lastSpelledIndex = null;
     addFireworks(fireworksPerBatch);
   } else {
     const number = sequence.getInterludeNumber();
     displayLines = [String(number)];
     textColor = randomFrom(numberColors);
     balls = spawnBalls(number);
+    if (announce) audioManager.playGlyphChange();
   }
 
   lastStepChange = Date.now();
@@ -260,6 +271,7 @@ const startCelebration = () => {
   gameState = celebrating;
   displayLines = ["ALL", "DONE"];
   textColor = nextCelebrationColor();
+  audioManager.playSessionEnd();
   entranceStart = Date.now();
   balls = [];
   fireworks = [];
@@ -284,12 +296,13 @@ makeStartScreen(
     // needs in order to open at all
     audioManager.initialize();
     audioManager.resetPluckSequence();
+    audioManager.playSessionStart();
 
     gameState = playing;
     balls = [];
     fireworks = [];
     timer.start(durationMs);
-    showCurrentStep();
+    showCurrentStep({ announce: false });
   }
 );
 
@@ -390,7 +403,7 @@ const wordIsSpelledOut = () => spellOutIndex() >= sequence.getWord().length;
 
 // Three states, so a word can be read aloud a letter at a time: the letter
 // being said now, the ones already said, and the ones still to come. When the
-// last one is said the whole word lights up together, exclamation point and all
+// last one is said the whole word lights up together
 const spellOutFill = (index) =>
   wordIsSpelledOut() || index <= spellOutIndex()
     ? textColor
@@ -398,6 +411,24 @@ const spellOutFill = (index) =>
 
 const spellOutUnderline = (index) =>
   !wordIsSpelledOut() && index === spellOutIndex() ? spellOutColor : null;
+
+// A note under each letter as it lights up, and a chord under the whole word
+// at the end. Read off the highlight rather than scheduled alongside it, so
+// what's heard is what's on screen. The index only ever climbs, which is what
+// keeps the closing chord to one playing
+const playSpellOutNotes = () => {
+  const index = spellOutIndex();
+
+  if (index < 0 || index === lastSpelledIndex) return;
+
+  lastSpelledIndex = index;
+
+  if (index < sequence.getWord().length) {
+    audioManager.playSpellOutLetter(index);
+  } else if (index === sequence.getWord().length) {
+    audioManager.playWordSpelled();
+  }
+};
 
 // The word so far, small along the bottom, so a run of letters reads as a word
 // being built rather than letters that happen to be in order. The letter on
@@ -439,6 +470,10 @@ animate((deltaTime) => {
   scaleSpring.update();
 
   if (gameState === playing && timer.update()) startCelebration();
+
+  if (gameState === playing && sequence.getStep() === wordComplete) {
+    playSpellOutNotes();
+  }
 
   if (
     gameState === celebrating &&
