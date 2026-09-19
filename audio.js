@@ -165,10 +165,14 @@ export const makeAudioManager = () => {
     _playNotes([index], { duration: 0.4, gain: 0.15 });
 
   // Sounding a word out, a chunk at a time, after its letters have been said
-  // one at a time. The same climb the letters got, shorter and further back,
-  // so it reads as the same phrase said again rather than as a new one
-  const playSoundGroup = (index) =>
-    _playNotes([index], { duration: 0.32, gain: 0.12 });
+  // one at a time. The same climb the letters got, further back, so it reads
+  // as the same phrase said again rather than as a new one.
+  //
+  // A note rings for as long as its sound is held rather than for a fixed
+  // flick, so a stretched vowel sounds stretched and the rest of the beat is
+  // the gap before the next one
+  const playSoundGroup = (index, holdMs) =>
+    _playNotes([index], { duration: (holdMs * 0.7) / 1000, gain: 0.12 });
 
   // The word whole, once its sounds have been said. A chord rather than
   // another step up the scale, spread out across about as long as the line

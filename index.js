@@ -20,6 +20,7 @@ import { makeAudioManager } from "./audio.js";
 import { makeFirework } from "./firework.js";
 import { makeTimer } from "./timer.js";
 import { makeStartScreen } from "./startScreen.js";
+import { soundBeatFor } from "./words.js";
 import {
   makeSequence,
   spelling,
@@ -88,10 +89,10 @@ const wordSpellOutInterval = 700;
 // starting over, and without it the bar jumping back to the front of the word
 // reads as a glitch rather than as a second pass
 const wordSoundOutDelay = 350;
-// Sounds run quicker than letters. Blending is the part that's meant to run
-// together, and holding each chunk as long as a whole letter pulls the word
-// back apart into pieces
-const wordSoundOutInterval = 500;
+// Sounds don't share a beat the way letters do — how long each one is held is
+// in words.js, next to the sounds themselves. Naming a letter takes about as
+// long whichever letter it is; saying one doesn't
+//
 // Then the word as one thing: a line drawn left to right underneath it, about
 // as long as running a finger under it while saying it
 const wordReadDuration = 600;
@@ -162,9 +163,27 @@ const sayingWord = "sayingWord";
 const planSpellOut = (word, groups) => {
   const lettersEnd = wordSpellOutDelay + word.length * wordSpellOutInterval;
   const soundsStart = lettersEnd + (groups ? wordSoundOutDelay : 0);
-  const soundsEnd =
-    soundsStart + (groups ? groups.length * wordSoundOutInterval : 0);
   let letterIndex = 0;
+  let soundStart = soundsStart;
+
+  // Each sound as the run of letters that spells it, so the bar under a sound
+  // is drawn the same way the bar under a single letter is, and the moment it
+  // lands, since a sound held twice as long pushes everything after it back
+  const soundRanges = (groups || []).map((sound) => {
+    const range = {
+      from: letterIndex,
+      to: letterIndex + sound.length - 1,
+      at: soundStart,
+      hold: soundBeatFor(sound),
+    };
+
+    letterIndex += sound.length;
+    soundStart += range.hold;
+
+    return range;
+  });
+
+  const soundsEnd = soundStart;
 
   return {
     lettersStart: wordSpellOutDelay,
@@ -172,14 +191,7 @@ const planSpellOut = (word, groups) => {
     soundsStart,
     soundsEnd,
     readingEnd: soundsEnd + wordReadDuration,
-    // Each sound as the run of letters that spells it, so the bar under a
-    // sound is drawn the same way the bar under a single letter is
-    soundRanges: (groups || []).map((sound) => {
-      const from = letterIndex;
-      letterIndex += sound.length;
-
-      return { from, to: letterIndex - 1 };
-    }),
+    soundRanges,
   };
 };
 
@@ -458,6 +470,22 @@ document.addEventListener("touchmove", (e) => e.preventDefault(), {
 // An index below zero is a pass that hasn't said anything yet — the word still
 // arriving, or the breath between the letters and the sounds — which is what
 // lets both of those be waited out without a special case
+// Which sound is being said now. Sounds aren't the same length as each other,
+// so this is a walk through them rather than a division
+const soundAt = (elapsed) => {
+  const { soundRanges } = spellOutPlan;
+  let index = 0;
+
+  while (
+    index + 1 < soundRanges.length &&
+    elapsed >= soundRanges[index + 1].at
+  ) {
+    index++;
+  }
+
+  return index;
+};
+
 const spellOutBeat = () => {
   const elapsed = Date.now() - entranceStart;
   const { lettersStart, lettersEnd, soundsStart, soundsEnd, readingEnd } =
@@ -474,12 +502,7 @@ const spellOutBeat = () => {
 
   if (elapsed < soundsStart) return { pass: sayingSounds, index: -1 };
 
-  if (elapsed < soundsEnd) {
-    return {
-      pass: sayingSounds,
-      index: Math.floor((elapsed - soundsStart) / wordSoundOutInterval),
-    };
-  }
+  if (elapsed < soundsEnd) return { pass: sayingSounds, index: soundAt(elapsed) };
 
   return {
     pass: sayingWord,
@@ -533,7 +556,10 @@ const playSpellOutNotes = (beat) => {
   if (beat.pass === sayingLetters) {
     audioManager.playSpellOutLetter(beat.index);
   } else if (beat.pass === sayingSounds) {
-    audioManager.playSoundGroup(beat.index);
+    audioManager.playSoundGroup(
+      beat.index,
+      spellOutPlan.soundRanges[beat.index].hold
+    );
   } else {
     audioManager.playWordSpelled();
   }

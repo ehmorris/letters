@@ -67,6 +67,41 @@ const names = {
   CARY: ["C", "AR", "Y"],
 };
 
+// How long a sound is held when a word is being said slowly. Sounding out
+// isn't an even beat, and giving it one is what made the pairs feel hurried:
+// SH got the same flick as F, when saying it slowly means leaning on it.
+//
+// A stop is over the moment it starts — there's no holding the CK of DUCK — a
+// consonant you can hum runs on for as long as there's breath, a vowel
+// stretches furthest of all, and a blend is two sounds where everything else
+// here is one. "D, uuu, ck" is the rhythm of DUCK said slowly, and it isn't
+// three of anything.
+const stopBeat = 500;
+const heldBeat = 680;
+const vowelBeat = 820;
+const blendBeat = 900;
+
+const soundBeats = {
+  B: stopBeat, C: stopBeat, D: stopBeat, G: stopBeat, K: stopBeat,
+  P: stopBeat, Q: stopBeat, T: stopBeat, X: stopBeat,
+  CK: stopBeat, GG: stopBeat, PP: stopBeat,
+
+  F: heldBeat, H: heldBeat, J: heldBeat, L: heldBeat, M: heldBeat,
+  N: heldBeat, R: heldBeat, S: heldBeat, V: heldBeat, W: heldBeat,
+  Y: heldBeat, Z: heldBeat,
+  LE: heldBeat, LL: heldBeat, SH: heldBeat,
+
+  A: vowelBeat, E: vowelBeat, I: vowelBeat, O: vowelBeat, U: vowelBeat,
+  AI: vowelBeat, EE: vowelBeat, OE: vowelBeat, OO: vowelBeat, OW: vowelBeat,
+  AR: vowelBeat, EAR: vowelBeat, ER: vowelBeat, IR: vowelBeat,
+
+  BR: blendBeat, FR: blendBeat, QU: blendBeat, ST: blendBeat, TR: blendBeat,
+};
+
+// A sound nobody has timed is held as long as one you can hum, which is the
+// middle of the range and never badly wrong
+export const soundBeatFor = (sound) => soundBeats[sound] || heldBeat;
+
 // Saying a word after spelling it goes through its sounds rather than its
 // letters — "F, I, S, H... f-i-sh... fish". Nothing here means no second pass:
 // either the word is all single letters, or its chunks don't add up to it,
