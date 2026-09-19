@@ -67,6 +67,47 @@ const names = {
   CARY: ["C", "AR", "Y"],
 };
 
+// How long a sound is held. Nobody is reading these to themselves: a grown up
+// says them out loud as they light up and a small kid says them back, so every
+// beat has to fit two goes at the sound, and the slow one is the kid's. They're
+// two, they're still finding the sound, and they won't be hurried. Timed for
+// one adult reading slowly — which is what these were at first — the highlight
+// has moved on before the kid has started.
+//
+// Within that, sounding out isn't an even beat either. A stop is over the
+// moment it starts — there's no holding the CK of DUCK — a consonant you can
+// hum runs on for as long as there's breath, a vowel stretches furthest of
+// all, and a blend is two sounds where everything else here is one. "D, uuu,
+// ck" is the rhythm of DUCK said slowly, and it isn't three of anything.
+//
+// So: room for a grown up and then a kid, and the shape of the sound on top.
+// Scaling all four together keeps that shape while changing the pace
+const stopBeat = 900;
+const heldBeat = 1200;
+const vowelBeat = 1450;
+const blendBeat = 1600;
+
+const soundBeats = {
+  B: stopBeat, C: stopBeat, D: stopBeat, G: stopBeat, K: stopBeat,
+  P: stopBeat, Q: stopBeat, T: stopBeat, X: stopBeat,
+  CK: stopBeat, GG: stopBeat, PP: stopBeat,
+
+  F: heldBeat, H: heldBeat, J: heldBeat, L: heldBeat, M: heldBeat,
+  N: heldBeat, R: heldBeat, S: heldBeat, V: heldBeat, W: heldBeat,
+  Y: heldBeat, Z: heldBeat,
+  LE: heldBeat, LL: heldBeat, SH: heldBeat,
+
+  A: vowelBeat, E: vowelBeat, I: vowelBeat, O: vowelBeat, U: vowelBeat,
+  AI: vowelBeat, EE: vowelBeat, OE: vowelBeat, OO: vowelBeat, OW: vowelBeat,
+  AR: vowelBeat, EAR: vowelBeat, ER: vowelBeat, IR: vowelBeat,
+
+  BR: blendBeat, FR: blendBeat, QU: blendBeat, ST: blendBeat, TR: blendBeat,
+};
+
+// A sound nobody has timed is held as long as one you can hum, which is the
+// middle of the range and never badly wrong
+export const soundBeatFor = (sound) => soundBeats[sound] || heldBeat;
+
 // Saying a word after spelling it goes through its sounds rather than its
 // letters — "F, I, S, H... f-i-sh... fish". Nothing here means no second pass:
 // either the word is all single letters, or its chunks don't add up to it,
